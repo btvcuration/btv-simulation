@@ -7,13 +7,13 @@ import {
   Eye, EyeOff, Database, Layers, Hash, Edit3, AlertTriangle, Link, MousePointer, Image as ImageIcon,
   MousePointerClick, Image, Tag, PlusCircle, MoreHorizontal, GripHorizontal, Target, StickyNote, Settings, Upload, Link2, Box, Filter
 } from 'lucide-react';
-import { createClient } from '@supabase/supabase-js'; // createClient 직접 임포트
+// import { createClient } from '@supabase/supabase-js'; // 로컬 빌드 실패 시 CDN 사용
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 // --- Supabase Client Initialization ---
-// 오류 방지를 위해 파일 내부에서 직접 초기화합니다.
-// 실제 사용 시 .env 파일에 VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY를 설정하세요.
-const supabaseUrl = import.meta.env?.VITE_SUPABASE_URL || 'https://zzzgixizyafwatdmvuxc.supabase.co';
-const supabaseKey = import.meta.env?.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp6emdpeGl6eWFmd2F0ZG12dXhjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU4MjgyNzEsImV4cCI6MjA4MTQwNDI3MX0.iLsQ2sqnd9nNZ3bL9fzM0Px6YJ4Of-YNzh1o1rIBdxg';
+// import.meta.env 사용 시 빌드 타겟 오류가 발생할 수 있어 하드코딩된 값을 기본값으로 사용합니다.
+const supabaseUrl = 'https://zzzgixizyafwatdmvuxc.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp6emdpeGl6eWFmd2F0ZG12dXhjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU4MjgyNzEsImV4cCI6MjA4MTQwNDI3MX0.iLsQ2sqnd9nNZ3bL9fzM0Px6YJ4Of-YNzh1o1rIBdxg';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // --- Constants & Styles ---
@@ -126,7 +126,7 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
       const newContent = {
           id: `new-ct-${Date.now()}`,
           type: 'CONTENT',
-          title: '콘텐츠',
+          title: '새 콘텐츠',
           img: '',
           seriesId: ''
       };
@@ -283,23 +283,23 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
         <div className={`${sizeClass} ${bgClass} ${isTarget ? 'ring-2 ring-pink-500' : ''} rounded border ${isBanner ? '' : 'border-slate-700'} overflow-hidden flex items-center justify-center ${textClass} text-[10px] font-medium relative bg-cover bg-center transition-colors`}
              style={hasImage ? { backgroundImage: `url(${img})` } : {}}
         >
-          {/* Today B tv Content Title Overlay (Left Center) */}
+          {/* Today B tv Content Title Overlay (Left Center) - Increased Visibility */}
           {block.type === 'TODAY_BTV' && (
-             <div className="absolute top-1/2 left-4 -translate-y-1/2 z-10 text-white font-bold text-lg drop-shadow-md pointer-events-none">
-                 {displayText}
+             <div className="absolute top-1/2 left-4 -translate-y-1/2 z-10 pointer-events-none">
+                 <span className="text-white font-extrabold text-2xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] leading-tight">{displayText}</span>
              </div>
           )}
 
           {!hasImage && block.type !== 'TODAY_BTV' && displayText}
           
           <div className="absolute top-1 left-1 flex flex-col gap-1 z-10">
-            {isBanner && <span className={`text-[8px] ${isTarget ? 'bg-pink-600' : 'bg-orange-600/80'} text-white px-1 rounded font-bold`}>{isTarget ? 'TARGET' : 'BANNER'}</span>}
-            {!isBanner && block.type === 'TODAY_BTV' && <span className="text-[8px] bg-slate-600 text-white px-1 rounded">CONTENT</span>}
+            {isBanner && <span className={`text-[8px] ${isTarget ? 'bg-pink-600' : 'bg-orange-600/80'} text-white px-1 rounded font-bold shadow`}>{isTarget ? 'TARGET' : 'BANNER'}</span>}
+            {!isBanner && block.type === 'TODAY_BTV' && <span className="text-[8px] bg-slate-600/90 text-white px-1 rounded shadow backdrop-blur-sm">CONTENT</span>}
           </div>
           {isBanner && jiraLink && <div className="absolute top-1 right-1 z-10 text-white bg-[#0052cc] rounded-full p-0.5" title="Jira 링크 있음"><Link2 size={8}/></div>}
           {isBanner && !hasImage && <MousePointerClick className="absolute bottom-1 right-1 opacity-50" size={12}/>}
           {isBanner && draggable && <div className="absolute bottom-1 left-1 opacity-0 group-hover/poster:opacity-50 hover:!opacity-100 cursor-grab"><GripHorizontal size={12} className="text-white"/></div>}
-          {hasImage && <div className="absolute inset-0 bg-black/20 group-hover/poster:bg-black/0 transition-colors"></div>}
+          {hasImage && <div className="absolute inset-0 bg-black/10 group-hover/poster:bg-black/0 transition-colors"></div>}
         </div>
       </div>
     );
@@ -313,15 +313,6 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
   const canAddBanner = ['VERTICAL', 'HORIZONTAL', 'HORIZONTAL_MINI', 'TAB', 'BIG_BANNER', 'BANNER_1', 'BANNER_2', 'BANNER_3', 'MENU_BLOCK', 'TODAY_BTV', 'LONG_BANNER'].includes(block.type);
   const canPreview = ['VERTICAL', 'HORIZONTAL', 'HORIZONTAL_MINI', 'TAB', 'MULTI'].includes(block.type);
   const canEditId = true;
-
-  // Tab Handlers
-  const handleTabClick = (idx, tabName) => {
-    if (activeTab === idx && onEditTabName) {
-        onEditTabName(idx, tabName); 
-    } else {
-        setActiveTab(idx);
-    }
-  };
 
   return (
     <div className={`p-4 rounded-lg border ${blockStyle.border} ${blockStyle.bg} ${containerStyle} ${dragStyle} relative transition-colors`}>
@@ -413,11 +404,39 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
                        onDragEnter={(e) => onBannerDragEnter(e, idx)}
                        onDrop={(e) => onBannerDrop(e, 'BANNER')}
                        onDragOver={(e) => e.preventDefault()}
-                       className={`flex-shrink-0 w-48 h-28 rounded relative cursor-pointer transition-all ${idx === 0 ? 'ring-2 ring-blue-500' : 'opacity-70 hover:opacity-100'} bg-cover bg-center ${item.type === 'CONTENT' ? 'border border-slate-600' : 'border border-orange-500/30'}`}
+                       className={`flex-shrink-0 w-48 h-28 rounded relative cursor-pointer transition-all ${idx === 0 ? 'ring-2 ring-blue-500' : 'opacity-70 hover:opacity-100'} bg-cover bg-center ${item.type === 'CONTENT' ? 'border border-slate-600' : 'border border-orange-500/30'} group/item`}
                        style={item.img ? {backgroundImage: `url(${item.img})`} : {backgroundColor: item.type === 'CONTENT' ? '#1e293b' : 'rgba(249, 115, 22, 0.1)'}}
                   >
-                      {!item.img && <div className={`flex items-center justify-center h-full text-xs ${item.type === 'CONTENT' ? 'text-slate-400' : 'text-orange-300'}`}>{item.title}</div>}
-                      <div className={`absolute top-1 right-1 text-[9px] text-white px-1 rounded ${item.type === 'CONTENT' ? 'bg-slate-600' : 'bg-orange-600'}`}>{item.type === 'CONTENT' ? 'CONTENT' : 'BANNER'}</div>
+                      {/* --- [New Feature] Delete Button for Today B tv Content --- */}
+                      {!isOriginal && (
+                        <button 
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                const newItems = [...(block.items || [])];
+                                newItems.splice(idx, 1);
+                                onUpdate({ items: newItems });
+                            }}
+                            className="absolute -top-2 -right-2 z-20 bg-[#2e3038] text-slate-400 hover:text-red-500 border border-slate-600 rounded-full p-1 opacity-0 group-hover/item:opacity-100 transition-opacity shadow-lg"
+                            title="삭제"
+                        >
+                            <Trash2 size={12} />
+                        </button>
+                      )}
+
+                      {/* --- [Modified] Enhanced Visibility for Titles --- */}
+                      {!item.img && (
+                          <div className={`flex items-center justify-center h-full text-center px-2 font-bold break-keep ${item.type === 'CONTENT' ? 'text-slate-300' : 'text-orange-300'}`}>
+                              <span className="text-sm">{item.title}</span>
+                          </div>
+                      )}
+                      
+                      {item.img && (
+                          <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/95 via-black/60 to-transparent pt-6">
+                              <span className="text-white text-sm font-bold line-clamp-2 leading-snug drop-shadow-md">{item.title}</span>
+                          </div>
+                      )}
+
+                      <div className={`absolute top-1 left-1 text-[9px] text-white px-1.5 py-0.5 rounded font-bold shadow-sm backdrop-blur-sm ${item.type === 'CONTENT' ? 'bg-slate-600/90' : 'bg-orange-600/90'}`}>{item.type === 'CONTENT' ? 'CONTENT' : 'BANNER'}</div>
                   </div>
                ))}
             </div>
