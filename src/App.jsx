@@ -957,7 +957,7 @@ export default function App() {
   return (
     <div className="flex h-screen w-full overflow-hidden text-slate-200 font-sans" style={{ backgroundColor: COLORS.bg }}>
       <aside className="w-64 flex flex-col border-r border-[#2e3038] bg-[#161820] flex-shrink-0 z-20">
-        <div className="p-4 border-b border-[#2e3038] flex items-center gap-2"><div className="w-1.5 h-5 bg-[#7387ff] rounded-sm"></div><h1 className="text-lg font-bold text-white">B tv Admin</h1></div>
+        <div className="p-4 border-b border-[#2e3038] flex items-center gap-2"><div className="w-1.5 h-5 bg-[#7387ff] rounded-sm"></div><h1 className="text-lg font-bold text-white">B tv simulator</h1></div>
         <div className="flex-1 overflow-y-auto py-2">
             {gnbList.map(menu => (
                 <div key={menu.id} className="mb-1">
