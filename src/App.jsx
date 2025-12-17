@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { 
+import {
   Save, Plus, Trash2, GripVertical, Smartphone, Monitor, 
   RefreshCw, ChevronRight, Layout, Home, Video, 
   Star, Grid, FileText, CheckCircle, Download, ArrowRight, X, ArrowRightLeft,
@@ -7,14 +7,10 @@ import {
   Eye, EyeOff, Database, Layers, Hash, Edit3, AlertTriangle, Link, MousePointer, Image as ImageIcon,
   MousePointerClick, Image, Tag, PlusCircle, MoreHorizontal, GripHorizontal, Target, StickyNote, Settings, Upload, Link2, Box, Filter
 } from 'lucide-react';
-// import { createClient } from '@supabase/supabase-js'; // 로컬 빌드 실패 시 CDN 사용
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-// --- Supabase Client Initialization ---
-// import.meta.env 사용 시 빌드 타겟 오류가 발생할 수 있어 하드코딩된 값을 기본값으로 사용합니다.
-const supabaseUrl = 'https://zzzgixizyafwatdmvuxc.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp6emdpeGl6eWFmd2F0ZG12dXhjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU4MjgyNzEsImV4cCI6MjA4MTQwNDI3MX0.iLsQ2sqnd9nNZ3bL9fzM0Px6YJ4Of-YNzh1o1rIBdxg';
-const supabase = createClient(supabaseUrl, supabaseKey);
+// ▼▼▼ [추가] 새로 만든 Hook과 Service 가져오기 ▼▼▼
+import { useBtvData } from './hooks/useBtvData';
+import { supabase, USE_MOCK_DATA } from './services/api';
 
 // --- Constants & Styles ---
 const COLORS = {
@@ -509,19 +505,17 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
 };
 
 export default function App() {
+  const { 
+      gnbList, currentMenuPath, currentMenuId, 
+      blocks, setBlocks, originalBlocks, 
+      requests, setRequests, savedRequests, setSavedRequests,
+      isLoading, handleMenuChange 
+  } = useBtvData();
   const [viewMode, setViewMode] = useState('EDITOR');
   const [compareMode, setCompareMode] = useState(false);
   const [showInbox, setShowInbox] = useState(false);
   
   // Data State (Supabase)
-  const [gnbList, setGnbList] = useState([]);
-  const [currentMenuId, setCurrentMenuId] = useState(null);
-  const [currentMenuPath, setCurrentMenuPath] = useState(''); // 초기값 비움
-  
-  const [blocks, setBlocks] = useState([]);
-  const [originalBlocks, setOriginalBlocks] = useState([]); 
-  const [requests, setRequests] = useState([]); // Supabase에서 불러온 요청들
-  const [savedRequests, setSavedRequests] = useState([]); // (호환성 유지)
   const [viewRequest, setViewRequest] = useState(null);
   
   // Filter States
@@ -560,92 +554,6 @@ export default function App() {
   const dragType = useRef(null);
   const [isDragEnabled, setIsDragEnabled] = useState(false);
   const [hoveredBlockIndex, setHoveredBlockIndex] = useState(null);
-
-  // --- [Supabase 연동 1] GNB 메뉴 로드 ---
-  useEffect(() => {
-    const fetchGnb = async () => {
-      const { data, error } = await supabase
-        .from('gnb_menus')
-        .select('*')
-        .order('sort_order', { ascending: true });
-      
-      if (data && data.length > 0) {
-        setGnbList(data);
-        // 기본값: '홈' 메뉴 찾기
-        const home = data.find(m => m.slug === 'home') || data[0];
-        setCurrentMenuPath(home.name);
-        setCurrentMenuId(home.id);
-      }
-    };
-    fetchGnb();
-  }, []);
-
-  // --- [Supabase 연동 2] 블록 데이터 로드 ---
-  useEffect(() => {
-    if (!currentMenuId) return;
-
-    const fetchBlocks = async () => {
-      const { data, error } = await supabase
-        .from('blocks')
-        .select('*')
-        .eq('gnb_id', currentMenuId)
-        .order('sort_order', { ascending: true });
-
-      if (data) {
-        // DB 데이터를 프론트엔드 포맷으로 변환
-        const formattedBlocks = data.map(b => ({
-          id: b.id,
-          type: b.type,
-          title: b.title,
-          blockId: b.block_id_code,
-          showTitle: b.show_title,
-          isNew: false,
-          ...b.content // JSONB 데이터 병합
-        }));
-        setBlocks(formattedBlocks);
-        setOriginalBlocks(JSON.parse(JSON.stringify(formattedBlocks)));
-      } else {
-        setBlocks([]);
-        setOriginalBlocks([]);
-      }
-    };
-    fetchBlocks();
-  }, [currentMenuId]);
-
-  // --- [Supabase 연동 3] 요청서(Requests) 로드 ---
-  useEffect(() => {
-    const fetchRequests = async () => {
-        const { data } = await supabase
-            .from('requests')
-            .select('*')
-            .order('created_at', { ascending: false });
-        
-        if (data) {
-            // DB Request 포맷을 프론트엔드 포맷으로 매핑
-            const formattedRequests = data.map(r => ({
-                id: r.id,
-                title: r.title,
-                requester: r.requester,
-                gnb: r.gnb_target,
-                type: 'VERTICAL', // 임시값 (상세 정보는 snapshot에 있음)
-                desc: r.description,
-                location: r.location,
-                status: r.status,
-                date: new Date(r.created_at).toLocaleDateString(),
-                createdAt: new Date(r.created_at).toLocaleString(),
-                changes: [], 
-                snapshot: r.snapshot_new,
-                originalSnapshot: r.snapshot_original,
-                menuPath: r.gnb_target // 필터링용
-            }));
-            
-            // 기존 requests(Inbox용)와 savedRequests(UNA요청용) 모두 업데이트
-            setRequests(formattedRequests.filter(r => r.status === 'PENDING')); // 임시: Inbox에는 PENDING만
-            setSavedRequests(formattedRequests);
-        }
-    };
-    fetchRequests(); 
-  }, [viewMode]); // viewMode 변경 시 갱신
 
   const generateDiffs = () => {
     const changes = [];
@@ -800,7 +708,15 @@ export default function App() {
   const handleCreateRequest = async () => { 
     if (!newRequestData.headline || !newRequestData.requester) return alert('요청자 및 제목을 입력해주세요.'); 
     
-    // 단순 요청 등록 (DB Insert)
+    // [추가됨] Mock 모드일 경우 가짜 처리
+    if (USE_MOCK_DATA) {
+        alert('(Mock) 요청이 등록되었습니다. (실제 DB 저장 X)');
+        // 임시로 화면에만 추가하는 로직이 필요하면 여기에 작성
+        setModalState({ ...modalState, isOpen: false });
+        return;
+    }
+
+    // 기존 Supabase 로직
     const { error } = await supabase.from('requests').insert({
         requester: newRequestData.requester,
         title: newRequestData.headline,
@@ -808,7 +724,6 @@ export default function App() {
         description: newRequestData.desc,
         location: newRequestData.location,
         status: 'PENDING'
-        // snapshot 없이 텍스트 요청만 등록
     });
 
     if(!error) {
@@ -823,68 +738,50 @@ export default function App() {
   // --- [Supabase 연동 4] 핵심 액션 (저장, 승인 등) ---
   const handleConfirmAction = async () => {
     const { type, data } = modalState;
+
+    // [추가됨] Mock 모드 경고
+    if (USE_MOCK_DATA && ['SAVE', 'APPROVE', 'DELETE_REQUEST'].includes(type)) {
+       alert('⚠️ Mock 모드입니다. DB에 저장되지 않고 UI 상태만 변경됩니다.');
+    }
+
     if (type === 'DELETE_BLOCK') {
         setBlocks(prev => prev.filter(b => b.id !== data));
     }
     else if (type === 'DELETE_REQUEST') { 
-        await supabase.from('requests').delete().eq('id', data);
+        // Mock이 아닐 때만 DB 삭제
+        if (!USE_MOCK_DATA) await supabase.from('requests').delete().eq('id', data);
+        
         setSavedRequests(prev => prev.filter(r => r.id !== data)); 
         if (viewRequest?.id === data) setViewRequest(null); 
     }
     else if (type === 'RESET') { 
         setBlocks(JSON.parse(JSON.stringify(originalBlocks))); 
-        setRequests([]); // 또는 다시 fetch
+        setRequests([]); 
     }
     else if (type === 'SAVE') { 
-        // 1. 현재 편집 상태를 Snapshot으로 저장하여 Request 생성
-        const snapshot = blocks.map((b, idx) => ({ ...b, sort_order: idx }));
-        
-        const { error } = await supabase.from('requests').insert({
-            requester: '관리자', // 로그인 기능 구현 시 실제 유저명 대체
-            title: requestTitle,
-            gnb_target: currentMenuPath,
-            snapshot_new: snapshot,
-            snapshot_original: originalBlocks,
-            status: 'PENDING'
-        });
-
-        if(!error) {
-            alert('편성 요청이 저장되었습니다. "UNA 요청" 탭에서 확인하세요.');
-            // 선택 사항: 저장 후 바로 화면 갱신 원할 시 fetchRequests() 호출
-            window.location.reload(); 
+        if (USE_MOCK_DATA) {
+            alert('(Mock) 저장 완료 흉내');
         } else {
-            console.error(error);
-            alert('저장 실패');
+            // 실제 저장 로직
+            const snapshot = blocks.map((b, idx) => ({ ...b, sort_order: idx }));
+            const { error } = await supabase.from('requests').insert({
+                requester: '관리자', title: requestTitle, gnb_target: currentMenuPath, snapshot_new: snapshot, snapshot_original: originalBlocks, status: 'PENDING'
+            });
+            if(!error) { alert('편성 요청이 저장되었습니다.'); window.location.reload(); } else { alert('저장 실패'); }
         }
     }
     else if (type === 'APPROVE') { 
-        // 1. 기존 블록 삭제
-        await supabase.from('blocks').delete().eq('gnb_id', currentMenuId);
-        
-        // 2. 스냅샷 데이터로 블록 재생성
-        // (주의: snapshot 데이터는 프론트엔드 포맷이므로 DB 포맷으로 변환 필요)
-        const newBlocksData = data.snapshot.map((b, idx) => ({
-            gnb_id: currentMenuId,
-            type: b.type,
-            title: b.title,
-            block_id_code: b.blockId,
-            show_title: b.showTitle,
-            sort_order: idx,
-            content: { 
-                items: b.items, banners: b.banners, tabs: b.tabs, 
-                leadingBanners: b.leadingBanners, showPreview: b.showPreview,
-                contentId: b.contentId, contentIdType: b.contentIdType,
-                isTarget: b.isTarget, targetSeg: b.targetSeg, remarks: b.remarks
-            }
-        }));
-        
-        const { error } = await supabase.from('blocks').insert(newBlocksData);
-        
-        if(!error) {
-            // 3. 요청 상태 업데이트
-            await supabase.from('requests').update({ status: 'APPROVED' }).eq('id', data.id);
-            alert('편성이 반영되었습니다!');
-            window.location.reload();
+        if (USE_MOCK_DATA) {
+             alert('(Mock) 승인 완료 흉내');
+        } else {
+            // 실제 승인 로직
+            await supabase.from('blocks').delete().eq('gnb_id', currentMenuId);
+            const newBlocksData = data.snapshot.map((b, idx) => ({
+                gnb_id: currentMenuId, type: b.type, title: b.title, block_id_code: b.blockId, show_title: b.showTitle, sort_order: idx,
+                content: { items: b.items, banners: b.banners, tabs: b.tabs, leadingBanners: b.leadingBanners, showPreview: b.showPreview, contentId: b.contentId, contentIdType: b.contentIdType, isTarget: b.isTarget, targetSeg: b.targetSeg, remarks: b.remarks }
+            }));
+            const { error } = await supabase.from('blocks').insert(newBlocksData);
+            if(!error) { await supabase.from('requests').update({ status: 'APPROVED' }).eq('id', data.id); alert('반영되었습니다!'); window.location.reload(); }
         }
     }
     else if (type === 'DELETE_BANNER_CONFIRM') { handleDeleteBanner(); return; }
@@ -953,6 +850,26 @@ export default function App() {
   // Filter Logic
   const filteredRequests = requests.filter(req => inboxFilter === 'ALL' || req.gnb === inboxFilter).filter(r => r.status === 'PENDING');
   const filteredSavedRequests = savedRequests.filter(req => unaFilter === 'ALL' || (req.menuPath && req.menuPath.includes(unaFilter)));
+  
+  if (isLoading) {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center bg-[#100d1d] text-slate-300 gap-4">
+        {/* 로딩 스피너 (빙글빙글 도는 원) */}
+        <div className="w-10 h-10 border-4 border-slate-700 border-t-[#7387ff] rounded-full animate-spin"></div>
+        
+        {/* 텍스트 표시 */}
+        <div className="text-sm font-bold">
+          B tv 편성 데이터를 불러오고 있습니다...
+          {/* Mock 모드일 때만 표시되는 뱃지 */}
+          {USE_MOCK_DATA && (
+            <span className="ml-2 bg-orange-500/20 text-orange-400 px-2 py-1 rounded text-xs border border-orange-500/50">
+              TEST MODE
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen w-full overflow-hidden text-slate-200 font-sans" style={{ backgroundColor: COLORS.bg }}>
