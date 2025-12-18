@@ -1,20 +1,395 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { 
+import {
   Save, Plus, Trash2, GripVertical, Smartphone, Monitor, 
-  RefreshCw, ChevronRight, Layout, Home, Video, 
+  RefreshCw, ChevronRight, ChevronDown, Layout, Home, Video, 
   Star, Grid, FileText, CheckCircle, Download, ArrowRight, X, ArrowRightLeft,
-  Inbox, User, ExternalLink, RotateCcw, Calendar, Clock, ChevronLeft, Tv, Film, PlayCircle, BookOpen, MessageSquare, Ban,
+  Inbox, User, ExternalLink, RotateCcw, Calendar as CalendarIcon, Clock, ChevronLeft, Tv, Film, PlayCircle, BookOpen, MessageSquare, Ban,
   Eye, EyeOff, Database, Layers, Hash, Edit3, AlertTriangle, Link, MousePointer, Image as ImageIcon,
-  MousePointerClick, Image, Tag, PlusCircle, MoreHorizontal, GripHorizontal, Target, StickyNote, Settings, Upload, Link2, Box, Filter
+  MousePointerClick, Image, Tag, PlusCircle, MoreHorizontal, GripHorizontal, Target, StickyNote, Settings, Upload, Link2, Box, Filter,
+  Menu, History, Rewind, MoreVertical
 } from 'lucide-react';
-// import { createClient } from '@supabase/supabase-js'; // 로컬 빌드 실패 시 CDN 사용
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-// --- Supabase Client Initialization ---
-// import.meta.env 사용 시 빌드 타겟 오류가 발생할 수 있어 하드코딩된 값을 기본값으로 사용합니다.
+// ==========================================
+// [설정] 개발 모드 (Mock Data) vs 실제 모드 (Supabase)
+// true: 가짜 데이터 사용 (UI 테스트용)
+// false: 실제 Supabase DB 연동 (상용화용)
+// ==========================================
+const USE_MOCK_DATA = false;
+
+// --- Supabase Config ---
 const supabaseUrl = 'https://zzzgixizyafwatdmvuxc.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp6emdpeGl6eWFmd2F0ZG12dXhjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU4MjgyNzEsImV4cCI6MjA4MTQwNDI3MX0.iLsQ2sqnd9nNZ3bL9fzM0Px6YJ4Of-YNzh1o1rIBdxg';
-const supabase = createClient(supabaseUrl, supabaseKey);
+
+// --- Mock Supabase Client (껍데기) ---
+const mockSupabase = {
+  from: () => ({
+    select: () => Promise.resolve({ data: [], error: null }),
+    insert: () => Promise.resolve({ error: null, data: [] }),
+    update: () => Promise.resolve({ error: null }),
+    delete: () => Promise.resolve({ error: null }),
+    eq: () => ({ 
+        select: () => Promise.resolve({ data: [], error: null }), 
+        update: () => Promise.resolve({ error: null }), 
+        delete: () => Promise.resolve({ error: null }),
+        eq: () => ({ 
+             select: () => Promise.resolve({ data: [], error: null }),
+             lte: () => ({
+                 order: () => ({
+                     limit: () => Promise.resolve({ data: [], error: null })
+                 })
+             })
+        })
+    })
+  })
+};
+
+
+// --- Mock Initial Data ---
+const INITIAL_GNB_TREE = [
+    { 
+        id: '1', name: '홈', children: [] 
+    },
+    { 
+        id: '2', name: '영화', children: [
+            { id: '2-1', name: '추천 영화' },
+            { id: '2-2', name: '신작' },
+            { id: '2-3', name: '장르별' }
+        ] 
+    },
+    { 
+        id: '3', name: 'TV다시보기', children: [
+            { id: '3-1', name: '전체' },
+            { id: '3-2', name: 'KBS' },
+            { id: '3-3', name: 'MBC' },
+            { id: '3-4', name: 'SBS' }
+        ] 
+    },
+    { id: '4', name: '키즈', children: [] },
+    { id: '5', name: '다큐', children: [] }
+];
+
+const MOCK_BLOCKS = [
+  {
+    id: 'b1',
+    type: 'TODAY_BTV',
+    title: 'Today B tv',
+    showTitle: true,
+    items: [
+      { id: 'tb1', type: 'BANNER', title: '메인 배너', img: 'https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?q=80&w=800&auto=format&fit=crop' },
+      { id: 'tb2', type: 'CONTENT', title: '인기 영화 1' },
+      { id: 'tb3', type: 'CONTENT', title: '인기 영화 2' },
+      { id: 'tb4', type: 'BANNER', title: '서브 배너' }
+    ]
+  },
+  {
+    id: 'b2',
+    type: 'BIG_BANNER',
+    title: '빅배너 영역',
+    showTitle: true,
+    banners: [
+      { id: 'bb1', title: '이달의 추천작', desc: '놓치면 후회할 대작들을 만나보세요.', img: 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=800&auto=format&fit=crop' },
+      { id: 'bb2', title: '두 번째 배너', desc: '설명 텍스트입니다.' }
+    ]
+  },
+  {
+    id: 'b3',
+    type: 'VERTICAL',
+    title: '실시간 인기 콘텐츠',
+    showTitle: true,
+    contentIdType: 'RACE',
+    contentId: 'RT_POPULAR',
+    items: [
+        { id: 'v1', title: '영화 A' }, { id: 'v2', title: '영화 B' }, { id: 'v3', title: '영화 C' }, { id: 'v4', title: '영화 D' }
+    ]
+  },
+  {
+    id: 'b4',
+    type: 'HORIZONTAL',
+    title: '주말에 보기 좋은 영화',
+    showTitle: true,
+    contentIdType: 'LIBRARY',
+    contentId: 'NM12345',
+    items: [
+        { id: 'h1', title: '가로 포스터 1' }, { id: 'h2', title: '가로 포스터 2' }
+    ]
+  }
+];
+
+const MOCK_HISTORY_DATA = {
+    '2023-10-01': [
+        { id: 'h-oct1-1', type: 'TODAY_BTV', title: 'Today B tv (10/1)', items: [{ title: '10월의 시작' }] },
+        { id: 'h-oct1-2', type: 'VERTICAL', title: '10월 신작', items: [{ title: '영화 A' }] }
+    ],
+    '2023-10-15': [
+        { id: 'h-oct15-1', type: 'TODAY_BTV', title: 'Today B tv (10/15 변경)', items: [{ title: '가을 특선' }, { title: '단풍놀이' }] },
+        { id: 'h-oct15-2', type: 'VERTICAL', title: '10월 인기작', items: [{ title: '영화 B' }, { title: '영화 C' }] },
+        { id: 'h-oct15-3', type: 'BIG_BANNER', title: '중간 광고', banners: [{ title: '할인 이벤트' }] }
+    ],
+    '2023-10-25': [
+        { id: 'h-oct25-1', type: 'TODAY_BTV', title: 'Today B tv (10/25 변경)', items: [{ title: '할로윈 주간' }] },
+        { id: 'h-oct25-2', type: 'BIG_BANNER', title: '할로윈 특집', banners: [{ title: '공포 영화 50% 할인', desc: '무서운 영화 모음' }] },
+        { id: 'h-oct25-3', type: 'HORIZONTAL', title: '가족과 함께', items: [{ title: '코코' }, { title: '몬스터 주식회사' }] }
+    ]
+};
+
+const MOCK_REQUESTS = [
+    { 
+        id: 'r1', requester: '김편성', title: '신규 영화 블록 추가 요청', desc: '이번 주 신작 영화 소개를 위한 블록 추가', type: 'VERTICAL', gnb: '홈', status: 'PENDING', location: '상단', remarks: '급함', createdAt: '2023-11-01', changes: [{type: '신규', desc: '신규 블록 추가됨'}],
+        originalSnapshot: JSON.parse(JSON.stringify(MOCK_BLOCKS)), 
+        snapshot: JSON.parse(JSON.stringify([
+            { ...MOCK_BLOCKS[0] },
+            { id: 'new-mock-b', type: 'VERTICAL', title: '신규 요청 블록', items: [{title: 'New Content'}] },
+            ...MOCK_BLOCKS.slice(1)
+        ]))
+    },
+    { 
+        id: 'r2', requester: '이마케팅', title: '이벤트 배너 교체', desc: '봄맞이 할인 이벤트 배너', type: 'BIG_BANNER', gnb: '영화', status: 'PENDING', location: '중단', createdAt: '2023-11-02', changes: [{type: '수정', desc: '배너 이미지 교체됨'}],
+        originalSnapshot: JSON.parse(JSON.stringify(MOCK_BLOCKS)),
+        snapshot: JSON.parse(JSON.stringify(MOCK_BLOCKS))
+    }
+];
+
+// Mock Hook Implementation (Now accepts supabase client)
+const useBtvData = (supabase, viewMode) => {
+    const [gnbList, setGnbList] = useState(INITIAL_GNB_TREE);
+    const [expandedMenuIds, setExpandedMenuIds] = useState(['2', '3']); 
+    const [currentMenuPath, setCurrentMenuPath] = useState('홈');
+    const [currentMenuId, setCurrentMenuId] = useState('1');
+    const [blocks, setBlocks] = useState(JSON.parse(JSON.stringify(MOCK_BLOCKS)));
+    const [originalBlocks, setOriginalBlocks] = useState(JSON.parse(JSON.stringify(MOCK_BLOCKS))); 
+    const [requests, setRequests] = useState([...MOCK_REQUESTS]);
+    const [savedRequests, setSavedRequests] = useState([...MOCK_REQUESTS]);
+    const [isLoading, setIsLoading] = useState(false);
+
+    // --- [Supabase 연동 1] GNB 메뉴 로드 ---
+    useEffect(() => {
+        const fetchGnb = async () => {
+          if (USE_MOCK_DATA) {
+            setGnbList(INITIAL_GNB_TREE);
+            setCurrentMenuPath(INITIAL_GNB_TREE[0].name);
+            setCurrentMenuId(INITIAL_GNB_TREE[0].id);
+            return;
+          }
+          
+          if (!supabase || !supabase.from) return;
+
+          const { data, error } = await supabase
+            .from('gnb_menus')
+            .select('*')
+            .order('sort_order', { ascending: true });
+          
+          if (data && data.length > 0) {
+            // 계층 구조로 변환
+            const tree = [];
+            const map = {};
+            data.forEach(item => { map[item.id] = { ...item, children: [] }; });
+            data.forEach(item => {
+                if (item.parent_id) {
+                    if(map[item.parent_id]) map[item.parent_id].children.push(map[item.id]);
+                } else {
+                    tree.push(map[item.id]);
+                }
+            });
+            setGnbList(tree);
+            const home = tree.find(m => m.name === '홈') || tree[0];
+            if (home) {
+                setCurrentMenuPath(home.name);
+                setCurrentMenuId(home.id);
+            }
+          }
+        };
+        fetchGnb();
+    }, [supabase]);
+
+    // --- [Supabase 연동 2] 블록 데이터 로드 ---
+    useEffect(() => {
+        if (!currentMenuId) return;
+
+        const fetchBlocks = async () => {
+          if (USE_MOCK_DATA) {
+             if (blocks.length === 0 || currentMenuId === '1') { // Simple mock logic
+                 setBlocks(JSON.parse(JSON.stringify(MOCK_BLOCKS)));
+                 setOriginalBlocks(JSON.parse(JSON.stringify(MOCK_BLOCKS)));
+             }
+             return;
+          }
+
+          if (!supabase || !supabase.from) return;
+
+          const { data, error } = await supabase
+            .from('blocks')
+            .select('*')
+            .eq('gnb_id', currentMenuId)
+            .order('sort_order', { ascending: true });
+
+          if (data) {
+            const formattedBlocks = data.map(b => ({
+              id: b.id,
+              type: b.type,
+              title: b.title,
+              blockId: b.block_id_code,
+              showTitle: b.show_title,
+              isNew: false,
+              ...b.content
+            }));
+            setBlocks(formattedBlocks);
+            setOriginalBlocks(JSON.parse(JSON.stringify(formattedBlocks)));
+          } else {
+            setBlocks([]);
+            setOriginalBlocks([]);
+          }
+        };
+        fetchBlocks();
+    }, [currentMenuId, supabase]);
+
+    // --- [Supabase 연동 3] 요청서(Requests) 로드 ---
+    useEffect(() => {
+        const fetchRequests = async () => {
+            if (USE_MOCK_DATA) {
+                setRequests(MOCK_REQUESTS.filter(r => r.status === 'PENDING'));
+                setSavedRequests(MOCK_REQUESTS);
+                return;
+            }
+
+            if (!supabase || !supabase.from) return;
+
+            const { data } = await supabase
+                .from('requests')
+                .select('*')
+                .order('created_at', { ascending: false });
+            
+            if (data) {
+                const formattedRequests = data.map(r => ({
+                    id: r.id,
+                    title: r.title,
+                    requester: r.requester,
+                    gnb: r.gnb_target,
+                    type: 'VERTICAL', 
+                    desc: r.description,
+                    location: r.location,
+                    status: r.status,
+                    date: new Date(r.created_at).toLocaleDateString(),
+                    createdAt: new Date(r.created_at).toLocaleString(),
+                    changes: [], 
+                    snapshot: r.snapshot_new,
+                    originalSnapshot: r.snapshot_original,
+                    menuPath: r.gnb_target 
+                }));
+                setRequests(formattedRequests.filter(r => r.status === 'PENDING'));
+                setSavedRequests(formattedRequests);
+            }
+        };
+        fetchRequests(); 
+    }, [viewMode, supabase]);
+
+    // --- Handlers ---
+    const toggleExpand = (id) => {
+        if (expandedMenuIds.includes(id)) {
+            setExpandedMenuIds(expandedMenuIds.filter(eid => eid !== id));
+        } else {
+            setExpandedMenuIds([...expandedMenuIds, id]);
+        }
+    };
+
+    const handleMenuChange = (id, path, isLeaf = true) => {
+        if (!isLeaf) {
+            toggleExpand(id);
+            return;
+        }
+        if (USE_MOCK_DATA) {
+            setCurrentMenuId(id);
+            setCurrentMenuPath(path);
+            const shuffled = [...MOCK_BLOCKS].sort(() => 0.5 - Math.random());
+            const newBlocks = id === '1' ? [...MOCK_BLOCKS] : shuffled;
+            setBlocks(JSON.parse(JSON.stringify(newBlocks)));
+            setOriginalBlocks(JSON.parse(JSON.stringify(newBlocks)));
+        } else {
+            setCurrentMenuId(id);
+            setCurrentMenuPath(path);
+        }
+    };
+
+    const addGnb = async (name) => {
+        if (USE_MOCK_DATA) {
+            const newGnb = { id: `gnb-${Date.now()}`, name, children: [] };
+            setGnbList([...gnbList, newGnb]);
+        } else {
+            const { data } = await supabase.from('gnb_menus').insert({ name, sort_order: gnbList.length }).select();
+            if(data) setGnbList([...gnbList, { ...data[0], children: [] }]);
+        }
+    };
+
+    const addSubMenu = async (parentId, name) => {
+        if (USE_MOCK_DATA) {
+            setGnbList(gnbList.map(item => {
+                if (item.id === parentId) {
+                    return { ...item, children: [...(item.children || []), { id: `sub-${Date.now()}`, name }] };
+                }
+                return item;
+            }));
+            if (!expandedMenuIds.includes(parentId)) setExpandedMenuIds([...expandedMenuIds, parentId]);
+        } else {
+            const parent = gnbList.find(g => g.id === parentId);
+            const sortOrder = parent ? parent.children.length : 0;
+            const { data } = await supabase.from('gnb_menus').insert({ name, parent_id: parentId, sort_order: sortOrder }).select();
+            if(data) {
+                const newSub = data[0];
+                setGnbList(gnbList.map(item => {
+                    if (item.id === parentId) {
+                        return { ...item, children: [...(item.children || []), newSub] };
+                    }
+                    return item;
+                }));
+                if (!expandedMenuIds.includes(parentId)) setExpandedMenuIds([...expandedMenuIds, parentId]);
+            }
+        }
+    };
+
+    const deleteGnb = async (id) => {
+          if (USE_MOCK_DATA) {
+             setGnbList(gnbList.filter(item => item.id !== id));
+             if (currentMenuId === id) { setCurrentMenuId(null); setCurrentMenuPath(''); }
+          } else {
+             await supabase.from('gnb_menus').delete().eq('id', id);
+             setGnbList(gnbList.filter(item => item.id !== id));
+             if (currentMenuId === id) { setCurrentMenuId(null); setCurrentMenuPath(''); }
+          }
+    };
+
+    const deleteSubMenu = async (parentId, childId) => {
+          if (USE_MOCK_DATA) {
+              setGnbList(gnbList.map(item => {
+                  if (item.id === parentId) {
+                      return { ...item, children: item.children.filter(c => c.id !== childId) };
+                  }
+                  return item;
+              }));
+              if (currentMenuId === childId) { setCurrentMenuId(parentId); }
+          } else {
+              await supabase.from('gnb_menus').delete().eq('id', childId);
+               setGnbList(gnbList.map(item => {
+                  if (item.id === parentId) {
+                      return { ...item, children: item.children.filter(c => c.id !== childId) };
+                  }
+                  return item;
+              }));
+              if (currentMenuId === childId) { setCurrentMenuId(parentId); }
+          }
+    };
+
+    return {
+        gnbList, setGnbList, 
+        currentMenuPath, setCurrentMenuPath, 
+        currentMenuId, setCurrentMenuId,
+        expandedMenuIds, setExpandedMenuIds,
+        blocks, setBlocks, 
+        originalBlocks, setOriginalBlocks,
+        requests, setRequests, savedRequests, setSavedRequests,
+        isLoading, setIsLoading,
+        handleMenuChange, toggleExpand,
+        addGnb, addSubMenu, deleteGnb, deleteSubMenu
+    };
+};
 
 // --- Constants & Styles ---
 const COLORS = {
@@ -41,7 +416,6 @@ const CONTENT_STYLE = {
   hover: 'hover:border-slate-500'
 };
 
-// Block Styles Definition
 const BLOCK_STYLES = {
   TODAY: { bg: 'bg-blue-900/10', border: 'border-blue-500/30', badge: 'bg-blue-900/50 text-blue-300' },
   MULTI: { bg: 'bg-purple-900/10', border: 'border-purple-500/30', badge: 'bg-purple-900/50 text-purple-300' },
@@ -51,12 +425,11 @@ const BLOCK_STYLES = {
 
 // --- Components ---
 
-const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEditBannerId, onEditContentId, onEditTabName, onAddTab }) => {
+const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEditBannerId, onEditContentId, onEditTabName, onAddTab, readOnly = false }) => {
   const [activeTab, setActiveTab] = useState(0);
   const [currentBigBannerIndex, setCurrentBigBannerIndex] = useState(0);
   const [isBannerMenuOpen, setIsBannerMenuOpen] = useState(false);
   
-  // Banner Drag State
   const bannerDragItem = useRef(null);
   const bannerDragOverItem = useRef(null);
 
@@ -67,7 +440,6 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
   const containerStyle = isOriginal ? 'opacity-60 grayscale border-dashed' : '';
   const dragStyle = isDragging ? 'border-[#7387ff] shadow-lg scale-[1.02] z-50' : 'border-transparent';
   
-  // Style Logic
   let blockStyle = BLOCK_STYLES.CONTENT;
   if (isMulti) blockStyle = BLOCK_STYLES.MULTI;
   else if (isBannerBlock) blockStyle = BLOCK_STYLES.BANNER;
@@ -75,13 +447,13 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
 
   const togglePreview = (e) => {
     e.stopPropagation();
-    if (!onUpdate) return;
+    if (readOnly || !onUpdate) return;
     onUpdate({ showPreview: !block.showPreview });
   };
 
   const addBanner = (e, type) => {
     e.stopPropagation();
-    if (!onUpdate) return;
+    if (readOnly || !onUpdate) return;
     
     const newBanner = {
         id: `new-bn-${Date.now()}`,
@@ -122,7 +494,7 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
 
   const addContentToToday = (e) => {
       e.stopPropagation();
-      if (!onUpdate) return;
+      if (readOnly || !onUpdate) return;
       const newContent = {
           id: `new-ct-${Date.now()}`,
           type: 'CONTENT',
@@ -136,18 +508,21 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
   };
 
   const onBannerDragStart = (e, idx, listType) => {
+      if(readOnly) return;
       e.stopPropagation();
       bannerDragItem.current = { index: idx, type: listType };
       e.dataTransfer.effectAllowed = 'move';
   };
 
   const onBannerDragEnter = (e, idx) => {
+      if(readOnly) return;
       e.stopPropagation();
       e.preventDefault();
       bannerDragOverItem.current = idx;
   };
 
   const onBannerDrop = (e, listType) => {
+      if(readOnly) return;
       e.stopPropagation();
       e.preventDefault();
       const dragIndex = bannerDragItem.current?.index;
@@ -197,13 +572,14 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
 
   const handleEditIdClick = (e) => {
     e.stopPropagation();
-    if (!onEditId) return;
+    if (readOnly || !onEditId) return;
     const tabIndex = block.type === 'TAB' ? activeTab : null;
     onEditId(tabIndex);
   };
 
   const handleBannerClick = (e, item, index = null, isLeading = false) => {
     e.stopPropagation();
+    if(readOnly) return;
     if(item.type === 'CONTENT') {
         if(onEditContentId) onEditContentId(item, index);
     } else {
@@ -227,6 +603,10 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
       setCurrentBigBannerIndex(prev => (prev === block.banners.length - 1 ? 0 : prev + 1));
     }
   };
+
+  const handleTabClick = (idx, name) => {
+    setActiveTab(idx);
+  }
 
   const getDisplayCount = (type) => {
     switch(type) {
@@ -260,7 +640,6 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
       if (bannerType === 'MENU') sizeClass = "w-[200px] h-[88px]"; 
     }
 
-    // Today B tv Content Style (Distinct from Banner)
     if (block.type === 'TODAY_BTV' && !isBanner) {
         bgClass = `${CONTENT_STYLE.bg} ${CONTENT_STYLE.border} ${CONTENT_STYLE.hover} cursor-pointer`;
         textClass = CONTENT_STYLE.text;
@@ -271,19 +650,18 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
 
     return (
       <div 
-        draggable={draggable}
+        draggable={draggable && !readOnly}
         onDragStart={onDragStart}
         onDragEnter={onDragEnter}
         onDragOver={(e) => e.preventDefault()}
         onDrop={onDrop}
         onClick={onClick}
-        className={`flex-shrink-0 relative group/poster ${hasImage ? '' : ''} ${draggable ? 'cursor-grab active:cursor-grabbing' : ''}`}
-        title={isBanner ? "배너 수정" : "콘텐츠 수정"}
+        className={`flex-shrink-0 relative group/poster ${hasImage ? '' : ''} ${draggable && !readOnly ? 'cursor-grab active:cursor-grabbing' : ''}`}
+        title={readOnly ? '' : (isBanner ? "배너 수정" : "콘텐츠 수정")}
       >
         <div className={`${sizeClass} ${bgClass} ${isTarget ? 'ring-2 ring-pink-500' : ''} rounded border ${isBanner ? '' : 'border-slate-700'} overflow-hidden flex items-center justify-center ${textClass} text-[10px] font-medium relative bg-cover bg-center transition-colors`}
              style={hasImage ? { backgroundImage: `url(${img})` } : {}}
         >
-          {/* Today B tv Content Title Overlay (Left Center) - Increased Visibility */}
           {block.type === 'TODAY_BTV' && (
              <div className="absolute top-1/2 left-4 -translate-y-1/2 z-10 pointer-events-none">
                  <span className="text-white font-extrabold text-2xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] leading-tight">{displayText}</span>
@@ -298,7 +676,7 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
           </div>
           {isBanner && jiraLink && <div className="absolute top-1 right-1 z-10 text-white bg-[#0052cc] rounded-full p-0.5" title="Jira 링크 있음"><Link2 size={8}/></div>}
           {isBanner && !hasImage && <MousePointerClick className="absolute bottom-1 right-1 opacity-50" size={12}/>}
-          {isBanner && draggable && <div className="absolute bottom-1 left-1 opacity-0 group-hover/poster:opacity-50 hover:!opacity-100 cursor-grab"><GripHorizontal size={12} className="text-white"/></div>}
+          {isBanner && draggable && !readOnly && <div className="absolute bottom-1 left-1 opacity-0 group-hover/poster:opacity-50 hover:!opacity-100 cursor-grab"><GripHorizontal size={12} className="text-white"/></div>}
           {hasImage && <div className="absolute inset-0 bg-black/10 group-hover/poster:bg-black/0 transition-colors"></div>}
         </div>
       </div>
@@ -310,9 +688,9 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
   const itemsToRender = Array.isArray(block.items) ? block.items : [];
   const tabsToRender = Array.isArray(block.tabs) ? block.tabs : [];
 
-  const canAddBanner = ['VERTICAL', 'HORIZONTAL', 'HORIZONTAL_MINI', 'TAB', 'BIG_BANNER', 'BANNER_1', 'BANNER_2', 'BANNER_3', 'MENU_BLOCK', 'TODAY_BTV', 'LONG_BANNER'].includes(block.type);
+  const canAddBanner = !readOnly && ['VERTICAL', 'HORIZONTAL', 'HORIZONTAL_MINI', 'TAB', 'BIG_BANNER', 'BANNER_1', 'BANNER_2', 'BANNER_3', 'MENU_BLOCK', 'TODAY_BTV', 'LONG_BANNER'].includes(block.type);
   const canPreview = ['VERTICAL', 'HORIZONTAL', 'HORIZONTAL_MINI', 'TAB', 'MULTI'].includes(block.type);
-  const canEditId = true;
+  const canEditId = !readOnly;
 
   return (
     <div className={`p-4 rounded-lg border ${blockStyle.border} ${blockStyle.bg} ${containerStyle} ${dragStyle} relative transition-colors`}>
@@ -326,7 +704,7 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
           </div>
           {block.remarks && <p className="text-[10px] text-slate-500 flex items-center gap-1"><StickyNote size={10}/> {block.remarks}</p>}
           
-          {!isOriginal && (
+          {!isOriginal && !readOnly && (
             <div className="flex items-center gap-2 text-[10px]">
               {canAddBanner && (
                 <div className="relative">
@@ -399,7 +777,7 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
                {block.items?.map((item, idx) => (
                   <div key={idx} 
                        onClick={(e) => handleBannerClick(e, item, idx)}
-                       draggable={!isOriginal}
+                       draggable={!isOriginal && !readOnly}
                        onDragStart={(e) => onBannerDragStart(e, idx, 'BANNER')}
                        onDragEnter={(e) => onBannerDragEnter(e, idx)}
                        onDrop={(e) => onBannerDrop(e, 'BANNER')}
@@ -407,8 +785,7 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
                        className={`flex-shrink-0 w-48 h-28 rounded relative cursor-pointer transition-all ${idx === 0 ? 'ring-2 ring-blue-500' : 'opacity-70 hover:opacity-100'} bg-cover bg-center ${item.type === 'CONTENT' ? 'border border-slate-600' : 'border border-orange-500/30'} group/item`}
                        style={item.img ? {backgroundImage: `url(${item.img})`} : {backgroundColor: item.type === 'CONTENT' ? '#1e293b' : 'rgba(249, 115, 22, 0.1)'}}
                   >
-                      {/* --- [New Feature] Delete Button for Today B tv Content --- */}
-                      {!isOriginal && (
+                      {!isOriginal && !readOnly && (
                         <button 
                             onClick={(e) => {
                                 e.stopPropagation();
@@ -423,7 +800,6 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
                         </button>
                       )}
 
-                      {/* --- [Modified] Enhanced Visibility for Titles --- */}
                       {!item.img && (
                           <div className={`flex items-center justify-center h-full text-center px-2 font-bold break-keep ${item.type === 'CONTENT' ? 'text-slate-300' : 'text-orange-300'}`}>
                               <span className="text-sm">{item.title}</span>
@@ -456,16 +832,16 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
                         className={`px-3 py-1.5 text-xs font-medium rounded-t-md transition-colors whitespace-nowrap flex items-center gap-1 group ${activeTab === idx ? 'bg-[#7387ff] text-white' : 'text-slate-500 hover:text-slate-300'}`}
                       >
                         {tab.name || `Tab ${idx + 1}`}
-                        {activeTab === idx && !isOriginal && <Edit3 size={8} className="opacity-50 group-hover:opacity-100" />}
+                        {activeTab === idx && !isOriginal && !readOnly && <Edit3 size={8} className="opacity-50 group-hover:opacity-100" />}
                       </button>
                     ))}
-                    {!isOriginal && (
+                    {!isOriginal && !readOnly && (
                         <button onClick={(e) => { e.stopPropagation(); onAddTab(); }} className="px-2 py-1 text-slate-500 hover:text-white hover:bg-slate-700 rounded transition-colors"><Plus size={12}/></button>
                     )}
                   </div>
                   <div className="flex gap-2 overflow-x-auto flex-nowrap min-h-[100px] items-center pb-2">
                     {tabsToRender[activeTab]?.leadingBanners?.map((banner, idx) => (
-                      <PosterItem key={`tab-bn-${idx}`} type="VERTICAL" isBanner={true} isTarget={banner.isTarget} jiraLink={banner.jiraLink} bannerType={banner.type} text={banner.title || '배너'} img={banner.img} onClick={(e) => handleBannerClick(e, banner, idx, true)} draggable={!isOriginal} onDragStart={(e) => onBannerDragStart(e, idx, 'LEADING')} onDragEnter={(e) => onBannerDragEnter(e, idx)} onDrop={(e) => onBannerDrop(e, 'LEADING')} />
+                      <PosterItem key={`tab-bn-${idx}`} type="VERTICAL" isBanner={true} isTarget={banner.isTarget} jiraLink={banner.jiraLink} bannerType={banner.type} text={banner.title || '배너'} img={banner.img} onClick={(e) => handleBannerClick(e, banner, idx, true)} draggable={!isOriginal && !readOnly} onDragStart={(e) => onBannerDragStart(e, idx, 'LEADING')} onDragEnter={(e) => onBannerDragEnter(e, idx)} onDrop={(e) => onBannerDrop(e, 'LEADING')} />
                     ))}
                     {tabsToRender[activeTab]?.items?.slice(0,4).map((item, i) => <PosterItem key={i} type="VERTICAL" text={item.title} />)}
                   </div>
@@ -475,26 +851,26 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
                {block.banners?.map((banner, idx) => (
                  <div key={`bn-${idx}`} className={block.type === 'BAND_BANNER' ? 'w-full shrink-0' : 'shrink-0'}>
                    {block.type === 'BAND_BANNER' ? (
-                      <div draggable={!isOriginal} onDragStart={(e) => onBannerDragStart(e, idx, 'BANNER')} onDragEnter={(e) => onBannerDragEnter(e, idx)} onDrop={(e) => onBannerDrop(e, 'BANNER')} onDragOver={(e) => e.preventDefault()} onClick={(e) => handleBannerClick(e, banner, idx)} className={`w-full h-24 ${BANNER_STYLE.bg} border ${banner.isTarget ? 'border-pink-500/50' : BANNER_STYLE.border} ${BANNER_STYLE.hover} cursor-pointer rounded flex items-center justify-center ${BANNER_STYLE.text} text-[10px] font-bold relative bg-cover bg-center transition-colors group/band`} style={banner.img ? { backgroundImage: `url(${banner.img})` } : {}}>
+                      <div draggable={!isOriginal && !readOnly} onDragStart={(e) => onBannerDragStart(e, idx, 'BANNER')} onDragEnter={(e) => onBannerDragEnter(e, idx)} onDrop={(e) => onBannerDrop(e, 'BANNER')} onDragOver={(e) => e.preventDefault()} onClick={(e) => handleBannerClick(e, banner, idx)} className={`w-full h-24 ${BANNER_STYLE.bg} border ${banner.isTarget ? 'border-pink-500/50' : BANNER_STYLE.border} ${BANNER_STYLE.hover} cursor-pointer rounded flex items-center justify-center ${BANNER_STYLE.text} text-[10px] font-bold relative bg-cover bg-center transition-colors group/band`} style={banner.img ? { backgroundImage: `url(${banner.img})` } : {}}>
                         {!banner.img && (banner.title || '배너')}
                         <div className="absolute right-2 top-2 flex flex-col gap-1 items-end">{banner.isTarget && <span className="text-[8px] bg-pink-600 text-white px-1 rounded font-bold flex items-center gap-0.5"><Target size={6}/> TARGET</span>}{banner.landingType && <span className="text-[9px] bg-black/50 text-white px-1 rounded">{banner.landingType}</span>}{banner.jiraLink && <span className="text-[8px] bg-[#0052cc] text-white px-1 rounded flex items-center gap-0.5"><Link2 size={6}/> Jira</span>}</div>
-                        {!isOriginal && <div className="absolute left-2 top-1/2 -translate-y-1/2 opacity-0 group-hover/band:opacity-50 text-white cursor-grab"><GripVertical size={16}/></div>}
+                        {!isOriginal && !readOnly && <div className="absolute left-2 top-1/2 -translate-y-1/2 opacity-0 group-hover/band:opacity-50 text-white cursor-grab"><GripVertical size={16}/></div>}
                       </div>
                    ) : block.type === 'LONG_BANNER' ? (
-                      <div draggable={!isOriginal} onDragStart={(e) => onBannerDragStart(e, idx, 'BANNER')} onDragEnter={(e) => onBannerDragEnter(e, idx)} onDrop={(e) => onBannerDrop(e, 'BANNER')} onDragOver={(e) => e.preventDefault()} onClick={(e) => handleBannerClick(e, banner, idx)} className={`flex-shrink-0 w-48 h-[270px] ${BANNER_STYLE.bg} border ${banner.isTarget ? 'border-pink-500/50' : BANNER_STYLE.border} ${BANNER_STYLE.hover} cursor-pointer rounded flex flex-col items-center justify-center ${BANNER_STYLE.text} text-[10px] font-bold relative p-4 text-center bg-cover bg-center transition-colors group/long`} style={banner.img ? { backgroundImage: `url(${banner.img})` } : {}}>
+                      <div draggable={!isOriginal && !readOnly} onDragStart={(e) => onBannerDragStart(e, idx, 'BANNER')} onDragEnter={(e) => onBannerDragEnter(e, idx)} onDrop={(e) => onBannerDrop(e, 'BANNER')} onDragOver={(e) => e.preventDefault()} onClick={(e) => handleBannerClick(e, banner, idx)} className={`flex-shrink-0 w-48 h-[270px] ${BANNER_STYLE.bg} border ${banner.isTarget ? 'border-pink-500/50' : BANNER_STYLE.border} ${BANNER_STYLE.hover} cursor-pointer rounded flex flex-col items-center justify-center ${BANNER_STYLE.text} text-[10px] font-bold relative p-4 text-center bg-cover bg-center transition-colors group/long`} style={banner.img ? { backgroundImage: `url(${banner.img})` } : {}}>
                         {!banner.img && <><span className="mb-2">{banner.title || '배너'}</span><span className="text-[9px] opacity-70 font-normal">1032 x 1452 비율</span></>}
                         <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1">{banner.isTarget && <span className="text-[8px] bg-pink-600 text-white px-1 rounded font-bold">TARGET</span>}{banner.landingType && <span className="text-[9px] bg-black/50 text-white px-1 rounded">{banner.landingType}</span>}{banner.jiraLink && <span className="text-[8px] bg-[#0052cc] text-white px-1 rounded flex items-center gap-0.5"><Link2 size={6}/></span>}</div>
-                        {!isOriginal && <div className="absolute top-2 right-2 opacity-0 group-hover/long:opacity-50 text-white cursor-grab"><GripVertical size={14}/></div>}
+                        {!isOriginal && !readOnly && <div className="absolute top-2 right-2 opacity-0 group-hover/long:opacity-50 text-white cursor-grab"><GripVertical size={14}/></div>}
                       </div>
                    ) : block.type === 'MENU_BLOCK' ? (
-                       <PosterItem type="VERTICAL" isBanner={true} isTarget={banner.isTarget} jiraLink={banner.jiraLink} bannerType="MENU" text={banner.title} img={banner.img} onClick={(e) => handleBannerClick(e, banner, idx)} draggable={!isOriginal} onDragStart={(e) => onBannerDragStart(e, idx, 'BANNER')} onDragEnter={(e) => onBannerDragEnter(e, idx)} onDrop={(e) => onBannerDrop(e, 'BANNER')} />
+                       <PosterItem type="VERTICAL" isBanner={true} isTarget={banner.isTarget} jiraLink={banner.jiraLink} bannerType="MENU" text={banner.title} img={banner.img} onClick={(e) => handleBannerClick(e, banner, idx)} draggable={!isOriginal && !readOnly} onDragStart={(e) => onBannerDragStart(e, idx, 'BANNER')} onDragEnter={(e) => onBannerDragEnter(e, idx)} onDrop={(e) => onBannerDrop(e, 'BANNER')} />
                    ) : (
-                      <PosterItem type="VERTICAL" isBanner={true} isTarget={banner.isTarget} jiraLink={banner.jiraLink} bannerType={banner.type || (block.type === 'BANNER_1' ? '1-COL' : block.type === 'BANNER_2' ? '2-COL' : '3-COL')} text={banner.title} img={banner.img} onClick={(e) => handleBannerClick(e, banner, idx)} draggable={!isOriginal} onDragStart={(e) => onBannerDragStart(e, idx, 'BANNER')} onDragEnter={(e) => onBannerDragEnter(e, idx)} onDrop={(e) => onBannerDrop(e, 'BANNER')} />
+                      <PosterItem type="VERTICAL" isBanner={true} isTarget={banner.isTarget} jiraLink={banner.jiraLink} bannerType={banner.type || (block.type === 'BANNER_1' ? '1-COL' : block.type === 'BANNER_2' ? '2-COL' : '3-COL')} text={banner.title} img={banner.img} onClick={(e) => handleBannerClick(e, banner, idx)} draggable={!isOriginal && !readOnly} onDragStart={(e) => onBannerDragStart(e, idx, 'BANNER')} onDragEnter={(e) => onBannerDragEnter(e, idx)} onDrop={(e) => onBannerDrop(e, 'BANNER')} />
                    )}
                  </div>
                ))}
                {block.leadingBanners && block.leadingBanners.map((banner, idx) => (
-                 <PosterItem key={`lb-${idx}`} type={block.type} isBanner={true} isTarget={banner.isTarget} jiraLink={banner.jiraLink} bannerType={banner.type} text={banner.title || '배너'} img={banner.img} onClick={(e) => handleBannerClick(e, banner, idx, true)} draggable={!isOriginal} onDragStart={(e) => onBannerDragStart(e, idx, 'LEADING')} onDragEnter={(e) => onBannerDragEnter(e, idx)} onDrop={(e) => onBannerDrop(e, 'LEADING')} />
+                 <PosterItem key={`lb-${idx}`} type={block.type} isBanner={true} isTarget={banner.isTarget} jiraLink={banner.jiraLink} bannerType={banner.type} text={banner.title || '배너'} img={banner.img} onClick={(e) => handleBannerClick(e, banner, idx, true)} draggable={!isOriginal && !readOnly} onDragStart={(e) => onBannerDragStart(e, idx, 'LEADING')} onDragEnter={(e) => onBannerDragEnter(e, idx)} onDrop={(e) => onBannerDrop(e, 'LEADING')} />
                ))}
                {itemsToRender.slice(0, displayCount).map((item, idx) => (
                  <PosterItem key={idx} type={block.type} text={item.title} />
@@ -512,17 +888,43 @@ export default function App() {
   const [viewMode, setViewMode] = useState('EDITOR');
   const [compareMode, setCompareMode] = useState(false);
   const [showInbox, setShowInbox] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
+  
+  const [supabase, setSupabase] = useState(USE_MOCK_DATA ? mockSupabase : null);
+
+  // --- [Supabase Client Loader] ---
+  useEffect(() => {
+    if (!USE_MOCK_DATA) {
+        // 실제 운영 모드일 때 CDN 스크립트 로드
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+        script.async = true;
+        script.onload = () => {
+            if (window.supabase) {
+                const client = window.supabase.createClient(supabaseUrl, supabaseKey);
+                setSupabase(client);
+            }
+        };
+        document.body.appendChild(script);
+        return () => {
+            document.body.removeChild(script);
+        };
+    }
+  }, []);
+
+  const { 
+      gnbList, currentMenuPath, currentMenuId, 
+      expandedMenuIds, toggleExpand,
+      addGnb, deleteGnb, addSubMenu, deleteSubMenu,
+      blocks, setBlocks, originalBlocks, setOriginalBlocks,
+      requests, setRequests, savedRequests, setSavedRequests,
+      isLoading, handleMenuChange 
+  } = useBtvData(supabase, viewMode);
   
   // Data State (Supabase)
-  const [gnbList, setGnbList] = useState([]);
-  const [currentMenuId, setCurrentMenuId] = useState(null);
-  const [currentMenuPath, setCurrentMenuPath] = useState(''); // 초기값 비움
-  
-  const [blocks, setBlocks] = useState([]);
-  const [originalBlocks, setOriginalBlocks] = useState([]); 
-  const [requests, setRequests] = useState([]); // Supabase에서 불러온 요청들
-  const [savedRequests, setSavedRequests] = useState([]); // (호환성 유지)
   const [viewRequest, setViewRequest] = useState(null);
+  const [historyDate, setHistoryDate] = useState('');
   
   // Filter States
   const [inboxFilter, setInboxFilter] = useState('ALL');
@@ -553,7 +955,11 @@ export default function App() {
   const [scheduleDate, setScheduleDate] = useState('');
   const [requestTitle, setRequestTitle] = useState('');
   const [diffSummary, setDiffSummary] = useState([]);
-  const [newRequestData, setNewRequestData] = useState({ requester: '', headline: '', location: '', desc: '', remarks: '', type: 'VERTICAL', jiraLink: '', gnb: '홈' }); // Added gnb
+  const [newRequestData, setNewRequestData] = useState({ requester: '', headline: '', location: '', desc: '', remarks: '', type: 'VERTICAL', jiraLink: '', gnb: '홈' }); 
+  const [menuNameInput, setMenuNameInput] = useState('');
+
+  // Calendar State (Needed for History)
+  const [currentCalendarDate, setCurrentCalendarDate] = useState(new Date('2023-10-01')); // Start with mock data month
 
   const dragItem = useRef(null);
   const dragOverItem = useRef(null);
@@ -561,115 +967,47 @@ export default function App() {
   const [isDragEnabled, setIsDragEnabled] = useState(false);
   const [hoveredBlockIndex, setHoveredBlockIndex] = useState(null);
 
-  // --- [Supabase 연동 1] GNB 메뉴 로드 ---
-  useEffect(() => {
-    const fetchGnb = async () => {
-      const { data, error } = await supabase
-        .from('gnb_menus')
-        .select('*')
-        .order('sort_order', { ascending: true });
-      
-      if (data && data.length > 0) {
-        setGnbList(data);
-        // 기본값: '홈' 메뉴 찾기
-        const home = data.find(m => m.slug === 'home') || data[0];
-        setCurrentMenuPath(home.name);
-        setCurrentMenuId(home.id);
-      }
-    };
-    fetchGnb();
-  }, []);
-
-  // --- [Supabase 연동 2] 블록 데이터 로드 ---
-  useEffect(() => {
-    if (!currentMenuId) return;
-
-    const fetchBlocks = async () => {
-      const { data, error } = await supabase
-        .from('blocks')
-        .select('*')
-        .eq('gnb_id', currentMenuId)
-        .order('sort_order', { ascending: true });
-
-      if (data) {
-        // DB 데이터를 프론트엔드 포맷으로 변환
-        const formattedBlocks = data.map(b => ({
-          id: b.id,
-          type: b.type,
-          title: b.title,
-          blockId: b.block_id_code,
-          showTitle: b.show_title,
-          isNew: false,
-          ...b.content // JSONB 데이터 병합
-        }));
-        setBlocks(formattedBlocks);
-        setOriginalBlocks(JSON.parse(JSON.stringify(formattedBlocks)));
-      } else {
-        setBlocks([]);
-        setOriginalBlocks([]);
-      }
-    };
-    fetchBlocks();
-  }, [currentMenuId]);
-
-  // --- [Supabase 연동 3] 요청서(Requests) 로드 ---
-  useEffect(() => {
-    const fetchRequests = async () => {
-        const { data } = await supabase
-            .from('requests')
-            .select('*')
-            .order('created_at', { ascending: false });
-        
-        if (data) {
-            // DB Request 포맷을 프론트엔드 포맷으로 매핑
-            const formattedRequests = data.map(r => ({
-                id: r.id,
-                title: r.title,
-                requester: r.requester,
-                gnb: r.gnb_target,
-                type: 'VERTICAL', // 임시값 (상세 정보는 snapshot에 있음)
-                desc: r.description,
-                location: r.location,
-                status: r.status,
-                date: new Date(r.created_at).toLocaleDateString(),
-                createdAt: new Date(r.created_at).toLocaleString(),
-                changes: [], 
-                snapshot: r.snapshot_new,
-                originalSnapshot: r.snapshot_original,
-                menuPath: r.gnb_target // 필터링용
-            }));
-            
-            // 기존 requests(Inbox용)와 savedRequests(UNA요청용) 모두 업데이트
-            setRequests(formattedRequests.filter(r => r.status === 'PENDING')); // 임시: Inbox에는 PENDING만
-            setSavedRequests(formattedRequests);
-        }
-    };
-    fetchRequests(); 
-  }, [viewMode]); // viewMode 변경 시 갱신
-
+  // --- [개선된 Diff 로직] ---
   const generateDiffs = () => {
     const changes = [];
-    // Detailed Diff Logic
-    blocks.forEach(block => {
-      const original = originalBlocks.find(b => b.id === block.id);
-      if (!original) {
-        changes.push({ type: '신규', block, desc: `[${block.type}] ${block.title} 블록이 신규 추가되었습니다.` });
-      } else {
-        if (block.title !== original.title) changes.push({ type: '수정', block, desc: `타이틀 변경: ${original.title} → ${block.title}` });
-        if (block.showPreview !== original.showPreview) changes.push({ type: '수정', block, desc: `프리뷰: ${original.showPreview?'ON':'OFF'} → ${block.showPreview?'ON':'OFF'}` });
-        
-        // Banner Diffs
-        const orgLB = original.leadingBanners || [];
-        const newLB = block.leadingBanners || [];
-        if (orgLB.length !== newLB.length) changes.push({ type: '수정', block, desc: `앞단 배너 수 변경 (${orgLB.length}개 → ${newLB.length}개)` });
-        
-        const orgBanners = original.banners || (original.banner ? [original.banner] : []);
-        const newBanners = block.banners || (block.banner ? [block.banner] : []);
-        if (orgBanners.length !== newBanners.length) changes.push({ type: '수정', block, desc: `배너 수 변경 (${orgBanners.length}개 → ${newBanners.length}개)` });
-      }
+    const orgMap = new Map(originalBlocks.map(b => [b.id, b]));
+    originalBlocks.forEach(org => {
+        if (!blocks.find(b => b.id === org.id)) {
+            changes.push({ type: '삭제', block: org, desc: `[${org.type}] '${org.title}' 블록이 삭제되었습니다.` });
+        }
     });
-    originalBlocks.forEach(orgBlock => {
-      if (!blocks.find(b => b.id === orgBlock.id)) changes.push({ type: '삭제', block: orgBlock, desc: `[${orgBlock.type}] ${orgBlock.title} 블록이 삭제되었습니다.` });
+    blocks.forEach((block, index) => {
+        const original = orgMap.get(block.id);
+        if (!original) {
+            changes.push({ type: '신규', block, desc: `[${block.type}] '${block.title}' 블록이 신규 추가되었습니다.` });
+        } else {
+            const diffs = [];
+            if (block.title !== original.title) diffs.push(`타이틀 변경: '${original.title}' → '${block.title}'`);
+            const compareList = (orgList, newList, label) => {
+                const oList = orgList || [];
+                const nList = newList || [];
+                if (oList.length !== nList.length) {
+                    diffs.push(`${label} 개수 변경 (${oList.length}개 → ${nList.length}개)`);
+                } else {
+                    const oIds = oList.map(i => i.id).join(',');
+                    const nIds = nList.map(i => i.id).join(',');
+                    if (oIds !== nIds) diffs.push(`${label} 순서 변경됨`);
+                }
+            };
+            compareList(original.banners, block.banners, '배너');
+            compareList(original.leadingBanners, block.leadingBanners, '앞단 배너');
+            compareList(original.items, block.items, '콘텐츠 아이템'); 
+            if (block.tabs && original.tabs) {
+                 if (block.tabs.length !== original.tabs.length) diffs.push(`탭 개수 변경 (${original.tabs.length} -> ${block.tabs.length})`);
+            }
+            const orgIndex = originalBlocks.findIndex(b => b.id === block.id);
+            if (orgIndex !== -1 && orgIndex !== index) {
+                 diffs.push(`위치 이동 (${orgIndex + 1}번째 → ${index + 1}번째)`);
+            }
+            if (diffs.length > 0) {
+                changes.push({ type: '수정', block, desc: `[${block.title}] ${diffs.join(', ')}` });
+            }
+        }
     });
     return changes;
   };
@@ -689,19 +1027,7 @@ export default function App() {
 
   const confirmAddBlock = () => {
     if (!newBlockData.title) return alert('블록 타이틀을 입력해주세요.');
-    
-    // 로컬 상태에 먼저 추가 (저장 시 DB 반영)
-    let newBlock = { 
-        id: `new-${Date.now()}`, 
-        title: newBlockData.title, 
-        isNew: true, 
-        remarks: newBlockData.remarks, 
-        isTarget: newBlockData.isTarget, 
-        targetSeg: newBlockData.targetSeg, 
-        type: newBlockData.type, 
-        showTitle: newBlockData.showTitle 
-    };
-
+    let newBlock = { id: `new-${Date.now()}`, title: newBlockData.title, isNew: true, remarks: newBlockData.remarks, isTarget: newBlockData.isTarget, targetSeg: newBlockData.targetSeg, type: newBlockData.type, showTitle: newBlockData.showTitle };
      if (blockCategory === 'BANNER') {
        newBlock.type = newBlockData.type;
        newBlock.banners = [{ id: `bn-${Date.now()}`, title: newBlockData.bannerTitle || '배너', landingType: newBlockData.bannerLanding, landingValue: newBlockData.bannerValue, eventId: newBlockData.bannerEventId, img: newBlockData.bannerImg, type: newBlockData.type === 'BANNER_1' ? '1-COL' : newBlockData.type === 'BANNER_2' ? '2-COL' : newBlockData.type === 'BANNER_3' ? '3-COL' : newBlockData.type === 'MENU_BLOCK' ? 'MENU' : undefined, jiraLink: newBlockData.bannerJira }];
@@ -714,177 +1040,197 @@ export default function App() {
        if (newBlockData.type === 'TAB') newBlock.tabs = [{ id: 't1', name: '탭 1', contentId: 'N1', items: [{title:'콘텐츠 1'}, {title:'콘텐츠 2'}, {title:'콘텐츠 3'}, {title:'콘텐츠 4'}] }, { id: 't2', name: '탭 2', contentId: 'N2', items: [{title:'콘텐츠 1'}, {title:'콘텐츠 2'}, {title:'콘텐츠 3'}, {title:'콘텐츠 4'}] }];
        if (newBlockData.useLeadingBanner) newBlock.leadingBanners = [{ type: newBlockData.leadingBannerType, title: newBlockData.leadingBannerTitle || '배너', landingType: newBlockData.leadingBannerLanding, landingValue: newBlockData.leadingBannerValue, eventId: newBlockData.leadingBannerEventId, img: newBlockData.leadingBannerImg, jiraLink: newBlockData.leadingBannerJira }];
      }
-     
-     // 1번째 인덱스에 삽입 (Today B tv 다음)
-     const _blocks = [...blocks]; 
-     _blocks.splice(1, 0, newBlock); 
-     setBlocks(_blocks); 
-     setModalState({ isOpen: false, type: null, data: null });
+     const _blocks = [...blocks]; _blocks.splice(1, 0, newBlock); setBlocks(_blocks); setModalState({ isOpen: false, type: null, data: null });
   };
   
   const handleDelete = (id, e) => { e.preventDefault(); e.stopPropagation(); setModalState({ isOpen: true, type: 'DELETE_BLOCK', data: id }); };
-  const handleReset = () => { setBlocks(JSON.parse(JSON.stringify(originalBlocks))); }; // DB 원본으로 되돌리기 (로컬 리셋)
+  const handleReset = () => { setBlocks(JSON.parse(JSON.stringify(originalBlocks))); }; 
   const reqDeleteRequest = (id, e) => { e.stopPropagation(); setModalState({ isOpen: true, type: 'DELETE_REQUEST', data: id }); };
   const reqApprove = (req) => setModalState({ isOpen: true, type: 'APPROVE', data: req });
-  const handleRejectRequest = async (id, e) => { 
-      e.stopPropagation(); 
-      if(window.confirm('거절하시겠습니까?')) {
-          // Supabase 업데이트
-          await supabase.from('requests').update({status: 'REJECTED'}).eq('id', id);
-          setRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'REJECTED' } : r)); 
-      }
-  };
-  
+  const handleRejectRequest = async (id, e) => { e.stopPropagation(); if(window.confirm('거절하시겠습니까?')) { await supabase.from('requests').update({status: 'REJECTED'}).eq('id', id); setRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'REJECTED' } : r)); } };
   const handleUpdateBlock = (blockId, updates) => setBlocks(prev => prev.map(block => block.id === blockId ? { ...block, ...updates } : block));
-  
   const openEditIdModal = (block, tabIndex) => { let cType, cVal, cTarget, cSeg, cRemark; if (block.type === 'TAB' && tabIndex !== null && block.tabs[tabIndex]) { cType = block.tabs[tabIndex].contentIdType; cVal = block.tabs[tabIndex].contentId; } else { cType = block.contentIdType; cVal = block.contentId; cTarget = block.isTarget; cSeg = block.targetSeg; cRemark = block.remarks; } setEditIdData({ blockId: block.id, tabIndex, idType: cType, idValue: cVal, isTarget: cTarget || false, targetSeg: cSeg || '', remarks: cRemark || '', title: block.title || '', showTitle: block.showTitle !== false }); setModalState({ isOpen: true, type: 'EDIT_ID', data: null }); };
-  
   const saveEditedId = () => { const { blockId, tabIndex, idType, idValue, isTarget, targetSeg, remarks, title, showTitle } = editIdData; const block = blocks.find(b => b.id === blockId); if (!block) return; let updates = { title, showTitle }; if (block.type === 'TAB' && tabIndex !== null) { const newTabs = [...block.tabs]; newTabs[tabIndex] = { ...newTabs[tabIndex], contentIdType: idType, contentId: idValue }; updates.tabs = newTabs; } else { updates = { ...updates, contentIdType: idType, contentId: idValue, isTarget, targetSeg, remarks }; } handleUpdateBlock(blockId, updates); setModalState({ ...modalState, isOpen: false }); };
-  
-  const handleBannerEdit = (block, bannerData, bannerIndex, isLeading, tabIndex = null) => {
-    setEditBannerData({ blockId: block.id, isLeading, bannerIndex, tabIndex, landingType: bannerData.landingType || '', landingValue: bannerData.landingValue || '', img: bannerData.img || '', eventId: bannerData.eventId || '', jiraLink: bannerData.jiraLink || '', isTarget: bannerData.isTarget || false, targetSeg: bannerData.targetSeg || '', remarks: bannerData.remarks || '', title: bannerData.title || '', desc: bannerData.desc || '' }); setModalState({ isOpen: true, type: 'EDIT_BANNER', data: null });
-  };
-  
-  const saveEditedBanner = () => {
-      const { blockId, isLeading, bannerIndex, tabIndex, landingType, landingValue, img, eventId, jiraLink, isTarget, targetSeg, remarks, title, desc } = editBannerData;
-      setBlocks(prev => prev.map(b => {
-          if (b.id !== blockId) return b;
-          const newBlock = { ...b }; const newBannerData = { landingType, landingValue, img, eventId, jiraLink, isTarget, targetSeg, remarks, title, desc };
-          if (b.type === 'TAB' && tabIndex !== null) { const newTabs = [...b.tabs]; if (isLeading) { const currentTab = newTabs[tabIndex]; const newLeadingBanners = [...(currentTab.leadingBanners || [])]; if (newLeadingBanners[bannerIndex]) { newLeadingBanners[bannerIndex] = { ...newLeadingBanners[bannerIndex], ...newBannerData }; } newTabs[tabIndex] = { ...currentTab, leadingBanners: newLeadingBanners }; } newBlock.tabs = newTabs; } 
-          else if (isLeading) { const newLeadingBanners = [...(newBlock.leadingBanners || [])]; if (newLeadingBanners[bannerIndex]) { newLeadingBanners[bannerIndex] = { ...newLeadingBanners[bannerIndex], ...newBannerData }; } newBlock.leadingBanners = newLeadingBanners; } 
-          else if (newBlock.type === 'TODAY_BTV') { const newItems = [...(newBlock.items || [])]; if(newItems[bannerIndex]) { newItems[bannerIndex] = { ...newItems[bannerIndex], ...newBannerData }; } newBlock.items = newItems; }
-          else if (newBlock.banners) { const newBanners = [...newBlock.banners]; if (newBanners[bannerIndex]) { newBanners[bannerIndex] = { ...newBanners[bannerIndex], ...newBannerData }; } newBlock.banners = newBanners; } 
-          else if (newBlock.banner) { newBlock.banner = { ...newBlock.banner, ...newBannerData }; } return newBlock;
-      })); setModalState({ ...modalState, isOpen: false });
-  };
-  
-  const handleEditContent = (blockId, itemIndex, currentData) => {
-      setEditContentData({ blockId, itemIndex, title: currentData.title || '', seriesId: currentData.seriesId || '' });
-      setModalState({ isOpen: true, type: 'EDIT_CONTENT', data: null });
-  };
-  
-  const saveEditedContent = () => {
-      const { blockId, itemIndex, title, seriesId } = editContentData;
-      setBlocks(prev => prev.map(b => {
-          if (b.id !== blockId) return b;
-          const newItems = [...(b.items || [])];
-          if (newItems[itemIndex]) {
-              newItems[itemIndex] = { ...newItems[itemIndex], title, seriesId };
-          }
-          return { ...b, items: newItems };
-      }));
-      setModalState({ ...modalState, isOpen: false });
-  };
-  
+  const handleBannerEdit = (block, bannerData, bannerIndex, isLeading, tabIndex = null) => { setEditBannerData({ blockId: block.id, isLeading, bannerIndex, tabIndex, landingType: bannerData.landingType || '', landingValue: bannerData.landingValue || '', img: bannerData.img || '', eventId: bannerData.eventId || '', jiraLink: bannerData.jiraLink || '', isTarget: bannerData.isTarget || false, targetSeg: bannerData.targetSeg || '', remarks: bannerData.remarks || '', title: bannerData.title || '', desc: bannerData.desc || '' }); setModalState({ isOpen: true, type: 'EDIT_BANNER', data: null }); };
+  const saveEditedBanner = () => { const { blockId, isLeading, bannerIndex, tabIndex, landingType, landingValue, img, eventId, jiraLink, isTarget, targetSeg, remarks, title, desc } = editBannerData; setBlocks(prev => prev.map(b => { if (b.id !== blockId) return b; const newBlock = { ...b }; const newBannerData = { landingType, landingValue, img, eventId, jiraLink, isTarget, targetSeg, remarks, title, desc }; if (b.type === 'TAB' && tabIndex !== null) { const newTabs = [...b.tabs]; if (isLeading) { const currentTab = newTabs[tabIndex]; const newLeadingBanners = [...(currentTab.leadingBanners || [])]; if (newLeadingBanners[bannerIndex]) { newLeadingBanners[bannerIndex] = { ...newLeadingBanners[bannerIndex], ...newBannerData }; } newTabs[tabIndex] = { ...currentTab, leadingBanners: newLeadingBanners }; } newBlock.tabs = newTabs; } else if (isLeading) { const newLeadingBanners = [...(newBlock.leadingBanners || [])]; if (newLeadingBanners[bannerIndex]) { newLeadingBanners[bannerIndex] = { ...newLeadingBanners[bannerIndex], ...newBannerData }; } newBlock.leadingBanners = newLeadingBanners; } else if (newBlock.type === 'TODAY_BTV') { const newItems = [...(newBlock.items || [])]; if(newItems[bannerIndex]) { newItems[bannerIndex] = { ...newItems[bannerIndex], ...newBannerData }; } newBlock.items = newItems; } else if (newBlock.banners) { const newBanners = [...newBlock.banners]; if (newBanners[bannerIndex]) { newBanners[bannerIndex] = { ...newBanners[bannerIndex], ...newBannerData }; } newBlock.banners = newBanners; } else if (newBlock.banner) { newBlock.banner = { ...newBlock.banner, ...newBannerData }; } return newBlock; })); setModalState({ ...modalState, isOpen: false }); };
+  const handleEditContent = (blockId, itemIndex, currentData) => { setEditContentData({ blockId, itemIndex, title: currentData.title || '', seriesId: currentData.seriesId || '' }); setModalState({ isOpen: true, type: 'EDIT_CONTENT', data: null }); };
+  const saveEditedContent = () => { const { blockId, itemIndex, title, seriesId } = editContentData; setBlocks(prev => prev.map(b => { if (b.id !== blockId) return b; const newItems = [...(b.items || [])]; if (newItems[itemIndex]) { newItems[itemIndex] = { ...newItems[itemIndex], title, seriesId }; } return { ...b, items: newItems }; })); setModalState({ ...modalState, isOpen: false }); };
   const confirmDeleteBanner = () => { setModalState({ ...modalState, type: 'DELETE_BANNER_CONFIRM' }); };
-  
-  const handleDeleteBanner = () => {
-      const { blockId, isLeading, bannerIndex, tabIndex } = editBannerData;
-      setBlocks(prev => prev.map(b => {
-          if (b.id !== blockId) return b;
-          if (b.type === 'TAB' && tabIndex !== null) { const newTabs = [...b.tabs]; if (isLeading) { const currentTab = newTabs[tabIndex]; const newLeadingBanners = (currentTab.leadingBanners || []).filter((_, idx) => idx !== bannerIndex); newTabs[tabIndex] = { ...currentTab, leadingBanners: newLeadingBanners }; } return { ...b, tabs: newTabs }; }
-          if (isLeading) { const newLeadingBanners = (b.leadingBanners || []).filter((_, idx) => idx !== bannerIndex); return { ...b, leadingBanners: newLeadingBanners }; } 
-          else if (b.type === 'TODAY_BTV') { const newItems = (b.items || []).filter((_, idx) => idx !== bannerIndex); return { ...b, items: newItems }; }
-          else if (b.banners) { const newBanners = b.banners.filter((_, idx) => idx !== bannerIndex); if (newBanners.length === 0 && ['BAND_BANNER', 'LONG_BANNER', 'BANNER_1', 'BANNER_2', 'BANNER_3', 'MENU_BLOCK'].includes(b.type)) return null; return { ...b, banners: newBanners }; } return b;
-      }).filter(Boolean)); setModalState({ ...modalState, isOpen: false });
-  };
-  
+  const handleDeleteBanner = () => { const { blockId, isLeading, bannerIndex, tabIndex } = editBannerData; setBlocks(prev => prev.map(b => { if (b.id !== blockId) return b; if (b.type === 'TAB' && tabIndex !== null) { const newTabs = [...b.tabs]; if (isLeading) { const currentTab = newTabs[tabIndex]; const newLeadingBanners = (currentTab.leadingBanners || []).filter((_, idx) => idx !== bannerIndex); newTabs[tabIndex] = { ...currentTab, leadingBanners: newLeadingBanners }; } return { ...b, tabs: newTabs }; } if (isLeading) { const newLeadingBanners = (b.leadingBanners || []).filter((_, idx) => idx !== bannerIndex); return { ...b, leadingBanners: newLeadingBanners }; } else if (b.type === 'TODAY_BTV') { const newItems = (b.items || []).filter((_, idx) => idx !== bannerIndex); return { ...b, items: newItems }; } else if (b.banners) { const newBanners = b.banners.filter((_, idx) => idx !== bannerIndex); if (newBanners.length === 0 && ['BAND_BANNER', 'LONG_BANNER', 'BANNER_1', 'BANNER_2', 'BANNER_3', 'MENU_BLOCK'].includes(b.type)) return null; return { ...b, banners: newBanners }; } return b; }).filter(Boolean)); setModalState({ ...modalState, isOpen: false }); };
   const handleAddTab = (blockId) => { setBlocks(prev => prev.map(b => { if (b.id !== blockId) return b; const newTabs = [...(b.tabs || [])]; newTabs.push({ id: `tab-new-${Date.now()}`, name: `새 탭 ${newTabs.length + 1}`, contentId: '', items: [1,2,3,4].map(i => ({title: `콘텐츠 ${i}`})) }); return { ...b, tabs: newTabs }; })); };
-  
   const handleEditTabName = (blockId, tabIndex, currentName) => { setEditTabNameData({ blockId, tabIndex, name: currentName }); setModalState({ isOpen: true, type: 'EDIT_TAB_NAME', data: null }); };
-  
   const saveTabName = () => { const { blockId, tabIndex, name } = editTabNameData; setBlocks(prev => prev.map(b => { if (b.id !== blockId) return b; const newTabs = [...b.tabs]; newTabs[tabIndex] = { ...newTabs[tabIndex], name }; return { ...b, tabs: newTabs }; })); setModalState({ ...modalState, isOpen: false }); };
-  
   const handleOpenSaveModal = () => { const today = new Date(); today.setDate(today.getDate() + 3); setScheduleDate(today.toISOString().split('T')[0]); setRequestTitle(`[편성요청] ${currentMenuPath} 정기 개편`); const diffs = generateDiffs(); setDiffSummary(diffs.length > 0 ? diffs : [{ type: '알림', block: { title: '-' }, desc: '변경 사항이 없습니다.' }]); setModalState({ isOpen: true, type: 'SAVE', data: null }); };
   
-  const handleCreateRequest = async () => { 
-    if (!newRequestData.headline || !newRequestData.requester) return alert('요청자 및 제목을 입력해주세요.'); 
-    
-    // 단순 요청 등록 (DB Insert)
-    const { error } = await supabase.from('requests').insert({
-        requester: newRequestData.requester,
-        title: newRequestData.headline,
-        gnb_target: newRequestData.gnb,
-        description: newRequestData.desc,
-        location: newRequestData.location,
-        status: 'PENDING'
-        // snapshot 없이 텍스트 요청만 등록
-    });
+  const handleCreateRequest = async () => { if (!newRequestData.headline || !newRequestData.requester) return alert('요청자 및 제목을 입력해주세요.'); if (USE_MOCK_DATA) { alert('(Mock) 요청이 등록되었습니다. (실제 DB 저장 X)'); const mockNewReq = { id: `req-${Date.now()}`, requester: newRequestData.requester, title: newRequestData.headline, gnb: newRequestData.gnb, desc: newRequestData.desc, location: newRequestData.location, status: 'PENDING', type: newRequestData.type, remarks: newRequestData.remarks }; setRequests(prev => [mockNewReq, ...prev]); setModalState({ ...modalState, isOpen: false }); return; } if (!supabase) return; const { error } = await supabase.from('requests').insert({ requester: newRequestData.requester, title: newRequestData.headline, gnb_target: newRequestData.gnb, description: newRequestData.desc, location: newRequestData.location, status: 'PENDING' }); if(!error) { alert('요청이 등록되었습니다.'); window.location.reload(); } else { alert('요청 등록 실패'); } setModalState({ ...modalState, isOpen: false }); };
+  const handleAddMenu = () => { const { parentId } = modalState.data || {}; if (!menuNameInput) return alert('메뉴 이름을 입력해주세요.'); if (modalState.type === 'ADD_GNB') { addGnb(menuNameInput); } else if (modalState.type === 'ADD_SUBMENU') { addSubMenu(parentId, menuNameInput); } setMenuNameInput(''); setModalState({ isOpen: false, type: null, data: null }); };
+  const confirmDeleteGnb = (id) => { if (window.confirm('정말 삭제하시겠습니까? 하위 메뉴도 모두 삭제됩니다.')) { deleteGnb(id); } };
+  const confirmDeleteSubMenu = (parentId, childId) => { if (window.confirm('정말 삭제하시겠습니까?')) { deleteSubMenu(parentId, childId); } };
 
-    if(!error) {
-        alert('요청이 등록되었습니다.');
-        window.location.reload();
-    } else {
-        alert('요청 등록 실패');
-    }
-    setModalState({ ...modalState, isOpen: false }); 
+  // --- [Calendar Logic for History] ---
+  const getDaysInMonth = (date) => new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  const getFirstDayOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+
+  const handlePrevMonth = () => setCurrentCalendarDate(new Date(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth() - 1, 1));
+  const handleNextMonth = () => setCurrentCalendarDate(new Date(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth() + 1, 1));
+
+  // Find closest history logic
+  const findClosestHistoryDate = (targetDate) => {
+      // MOCK_HISTORY_DATA keys: 'YYYY-MM-DD'
+      const historyDates = Object.keys(MOCK_HISTORY_DATA).sort();
+      let closest = null;
+      for (const hDate of historyDates) {
+          if (hDate <= targetDate) {
+              closest = hDate;
+          } else {
+              break;
+          }
+      }
+      return closest;
   };
-  
+
+  const handleHistorySelect = async (selectedDateStr) => {
+      setModalState({ ...modalState, isOpen: false });
+      
+      // Mock History
+      if (USE_MOCK_DATA) {
+          const validHistoryDate = findClosestHistoryDate(selectedDateStr);
+          if (!validHistoryDate) { alert(`${selectedDateStr} 이전의 이력 데이터가 없습니다.`); return; }
+          const historyBlocks = MOCK_HISTORY_DATA[validHistoryDate] || [];
+          setHistoryDate(selectedDateStr);
+          setBlocks(historyBlocks); 
+          if (validHistoryDate !== selectedDateStr) alert(`선택하신 날짜(${selectedDateStr})의 변경분은 없어서,\n가장 최근 변경일(${validHistoryDate})의 데이터를 불러왔습니다.`);
+          return;
+      }
+
+      if (!supabase) return;
+
+      // Real History Fetch
+      const { data, error } = await supabase
+        .from('requests')
+        .select('*')
+        .eq('status', 'APPROVED')
+        .eq('gnb_target', currentMenuPath)
+        .lte('created_at', selectedDateStr + ' 23:59:59') // 해당 날짜 포함 이전
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (data && data.length > 0) {
+          const req = data[0];
+          setHistoryDate(selectedDateStr);
+          // Snapshot 복원
+          const snapshot = req.snapshot_new.map(b => ({
+             id: b.id, type: b.type, title: b.title, blockId: b.block_id_code, showTitle: b.show_title, isNew: false, ...b.content
+          }));
+          setBlocks(snapshot);
+          
+          const reqDate = new Date(req.created_at).toLocaleDateString();
+          if (reqDate !== new Date(selectedDateStr).toLocaleDateString()) {
+              alert(`선택하신 날짜(${selectedDateStr})의 변경분은 없어서,\n가장 최근 변경일(${reqDate})의 데이터를 불러왔습니다.`);
+          }
+      } else {
+          alert(`${selectedDateStr} 이전의 이력 데이터가 없습니다.`);
+      }
+  };
+
+  const renderCalendar = () => {
+      const year = currentCalendarDate.getFullYear();
+      const month = currentCalendarDate.getMonth();
+      const daysInMonth = getDaysInMonth(currentCalendarDate);
+      const firstDay = getFirstDayOfMonth(currentCalendarDate);
+      const days = [];
+
+      // Empty slots for prev month
+      for (let i = 0; i < firstDay; i++) {
+          days.push(<div key={`empty-${i}`} className="h-10"></div>);
+      }
+
+      // Days
+      for (let d = 1; d <= daysInMonth; d++) {
+          const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+          const hasHistory = USE_MOCK_DATA ? MOCK_HISTORY_DATA.hasOwnProperty(dateStr) : false; // Mock indicator only
+          days.push(
+              <button 
+                  key={d} 
+                  onClick={() => handleHistorySelect(dateStr)}
+                  className="h-10 rounded hover:bg-[#7387ff]/20 flex flex-col items-center justify-center relative group"
+              >
+                  <span className={`text-sm ${hasHistory ? 'text-white font-bold' : 'text-slate-400 group-hover:text-white'}`}>{d}</span>
+                  {hasHistory && <div className="w-1 h-1 bg-[#7387ff] rounded-full mt-1"></div>}
+              </button>
+          );
+      }
+      return days;
+  };
+
   // --- [Supabase 연동 4] 핵심 액션 (저장, 승인 등) ---
   const handleConfirmAction = async () => {
     const { type, data } = modalState;
+
     if (type === 'DELETE_BLOCK') {
         setBlocks(prev => prev.filter(b => b.id !== data));
     }
     else if (type === 'DELETE_REQUEST') { 
-        await supabase.from('requests').delete().eq('id', data);
+        if (!USE_MOCK_DATA && supabase) await supabase.from('requests').delete().eq('id', data);
         setSavedRequests(prev => prev.filter(r => r.id !== data)); 
         if (viewRequest?.id === data) setViewRequest(null); 
     }
     else if (type === 'RESET') { 
         setBlocks(JSON.parse(JSON.stringify(originalBlocks))); 
-        setRequests([]); // 또는 다시 fetch
+        setRequests([]); 
     }
     else if (type === 'SAVE') { 
-        // 1. 현재 편집 상태를 Snapshot으로 저장하여 Request 생성
-        const snapshot = blocks.map((b, idx) => ({ ...b, sort_order: idx }));
-        
-        const { error } = await supabase.from('requests').insert({
-            requester: '관리자', // 로그인 기능 구현 시 실제 유저명 대체
-            title: requestTitle,
-            gnb_target: currentMenuPath,
-            snapshot_new: snapshot,
-            snapshot_original: originalBlocks,
-            status: 'PENDING'
-        });
-
-        if(!error) {
-            alert('편성 요청이 저장되었습니다. "UNA 요청" 탭에서 확인하세요.');
-            // 선택 사항: 저장 후 바로 화면 갱신 원할 시 fetchRequests() 호출
-            window.location.reload(); 
+        if (USE_MOCK_DATA) {
+            alert('(Mock) 저장 완료 흉내');
+            const newSavedReq = { 
+                id: `saved-${Date.now()}`, 
+                title: requestTitle, 
+                status: 'PENDING', 
+                createdAt: new Date().toISOString().split('T')[0], 
+                date: scheduleDate, 
+                requester: '관리자 (Mock)', 
+                changes: diffSummary, 
+                menuPath: currentMenuPath,
+                originalSnapshot: JSON.parse(JSON.stringify(originalBlocks)),
+                snapshot: JSON.parse(JSON.stringify(blocks)) 
+            };
+            setSavedRequests(prev => [newSavedReq, ...prev]);
         } else {
-            console.error(error);
-            alert('저장 실패');
+            if (!supabase) return;
+            const snapshot = blocks.map((b, idx) => ({ ...b, sort_order: idx }));
+            const { error } = await supabase.from('requests').insert({
+                requester: '관리자', title: requestTitle, gnb_target: currentMenuPath, snapshot_new: snapshot, snapshot_original: originalBlocks, status: 'PENDING'
+            });
+            if(!error) { alert('편성 요청이 저장되었습니다.'); window.location.reload(); } else { alert('저장 실패'); }
         }
     }
     else if (type === 'APPROVE') { 
-        // 1. 기존 블록 삭제
-        await supabase.from('blocks').delete().eq('gnb_id', currentMenuId);
-        
-        // 2. 스냅샷 데이터로 블록 재생성
-        // (주의: snapshot 데이터는 프론트엔드 포맷이므로 DB 포맷으로 변환 필요)
-        const newBlocksData = data.snapshot.map((b, idx) => ({
-            gnb_id: currentMenuId,
-            type: b.type,
-            title: b.title,
-            block_id_code: b.blockId,
-            show_title: b.showTitle,
-            sort_order: idx,
-            content: { 
-                items: b.items, banners: b.banners, tabs: b.tabs, 
-                leadingBanners: b.leadingBanners, showPreview: b.showPreview,
-                contentId: b.contentId, contentIdType: b.contentIdType,
-                isTarget: b.isTarget, targetSeg: b.targetSeg, remarks: b.remarks
+        if (USE_MOCK_DATA) { 
+            const targetReqId = data.id;
+            setRequests(prev => prev.map(r => r.id === targetReqId ? { ...r, status: 'APPROVED' } : r));
+            setSavedRequests(prev => prev.map(r => r.id === targetReqId ? { ...r, status: 'APPROVED' } : r));
+            if (data.snapshot) {
+                setBlocks(JSON.parse(JSON.stringify(data.snapshot)));
+                setOriginalBlocks(JSON.parse(JSON.stringify(data.snapshot)));
             }
-        }));
-        
-        const { error } = await supabase.from('blocks').insert(newBlocksData);
-        
-        if(!error) {
-            // 3. 요청 상태 업데이트
-            await supabase.from('requests').update({ status: 'APPROVED' }).eq('id', data.id);
-            alert('편성이 반영되었습니다!');
-            window.location.reload();
+            if (viewRequest && viewRequest.id === targetReqId) {
+                setViewRequest({ ...viewRequest, status: 'APPROVED' });
+            }
+            alert('(Mock) 반영되었습니다! (로컬 상태 업데이트)'); 
+        } 
+        else {
+            if (!supabase) return;
+            await supabase.from('blocks').delete().eq('gnb_id', currentMenuId);
+            const newBlocksData = data.snapshot.map((b, idx) => ({
+                gnb_id: currentMenuId, type: b.type, title: b.title, block_id_code: b.blockId, show_title: b.showTitle, sort_order: idx,
+                content: { items: b.items, banners: b.banners, tabs: b.tabs, leadingBanners: b.leadingBanners, showPreview: b.showPreview, contentId: b.contentId, contentIdType: b.contentIdType, isTarget: b.isTarget, targetSeg: b.targetSeg, remarks: b.remarks }
+            }));
+            const { error } = await supabase.from('blocks').insert(newBlocksData);
+            if(!error) { 
+                await supabase.from('requests').update({ status: 'APPROVED' }).eq('id', data.id); 
+                alert('반영되었습니다!'); 
+                window.location.reload(); 
+            }
         }
     }
     else if (type === 'DELETE_BANNER_CONFIRM') { handleDeleteBanner(); return; }
@@ -953,56 +1299,170 @@ export default function App() {
   // Filter Logic
   const filteredRequests = requests.filter(req => inboxFilter === 'ALL' || req.gnb === inboxFilter).filter(r => r.status === 'PENDING');
   const filteredSavedRequests = savedRequests.filter(req => unaFilter === 'ALL' || (req.menuPath && req.menuPath.includes(unaFilter)));
+  
+  if (isLoading) {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center bg-[#100d1d] text-slate-300 gap-4">
+        <div className="w-10 h-10 border-4 border-slate-700 border-t-[#7387ff] rounded-full animate-spin"></div>
+        <div className="text-sm font-bold">
+          B tv 편성 데이터를 불러오고 있습니다...
+          {USE_MOCK_DATA && (
+            <span className="ml-2 bg-orange-500/20 text-orange-400 px-2 py-1 rounded text-xs border border-orange-500/50">TEST MODE</span>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen w-full overflow-hidden text-slate-200 font-sans" style={{ backgroundColor: COLORS.bg }}>
-      <aside className="w-64 flex flex-col border-r border-[#2e3038] bg-[#161820] flex-shrink-0 z-20">
-        <div className="p-4 border-b border-[#2e3038] flex items-center gap-2"><div className="w-1.5 h-5 bg-[#7387ff] rounded-sm"></div><h1 className="text-lg font-bold text-white">B tv simulator</h1></div>
-        <div className="flex-1 overflow-y-auto py-2">
-            {gnbList.map(menu => (
-                <div key={menu.id} className="mb-1">
-                    <div className={`flex items-center gap-3 px-4 py-2 cursor-pointer hover:bg-white/5 ${currentMenuPath === menu.name ? 'text-white font-bold bg-white/10' : 'text-slate-400'}`} onClick={() => { setCurrentMenuPath(menu.name); setCurrentMenuId(menu.id); }}>
-                        {/* 아이콘 매핑은 복잡하므로 텍스트로 대체하거나 추후 매핑 필요 */}
-                        {/* {menu.icon && <menu.icon size={16} />} */}
-                        <span className="flex-1 text-sm">{menu.name}</span>
-                        {/* {menu.children && <ChevronRight size={14} className="rotate-90 text-slate-600" />} */}
+      <aside className={`${isSidebarOpen ? 'w-64 border-r' : 'w-0 border-none'} flex flex-col border-[#2e3038] bg-[#161820] flex-shrink-0 z-20 transition-all duration-300 overflow-hidden`}>
+        <div className="w-64 flex flex-col h-full"> 
+            <div className="p-4 border-b border-[#2e3038] flex items-center gap-2"><div className="w-1.5 h-5 bg-[#7387ff] rounded-sm"></div><h1 className="text-lg font-bold text-white">B tv simulator</h1></div>
+            <div className="flex-1 overflow-y-auto py-2">
+                {gnbList.map(menu => (
+                    <div key={menu.id} className="mb-1">
+                        <div 
+                            className={`flex items-center gap-2 px-4 py-2 cursor-pointer hover:bg-white/5 group ${currentMenuId === menu.id ? 'bg-white/10' : ''}`} 
+                            onClick={() => handleMenuChange(menu.id, menu.name, (menu.children || []).length === 0)}
+                        >
+                            <div className={`flex-1 flex items-center gap-2 ${currentMenuId === menu.id || (menu.children?.length > 0 && expandedMenuIds.includes(menu.id)) ? 'text-white font-bold' : 'text-slate-400'}`}>
+                                {menu.children && menu.children.length > 0 && (
+                                    <span className="opacity-70">{expandedMenuIds.includes(menu.id) ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}</span>
+                                )}
+                                <span className="text-sm">{menu.name}</span>
+                            </div>
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); setMenuNameInput(''); setModalState({ isOpen: true, type: 'ADD_SUBMENU', data: { parentId: menu.id } }); }} 
+                                    className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-white"
+                                    title="하위 메뉴 추가"
+                                >
+                                    <Plus size={12}/>
+                                </button>
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); confirmDeleteGnb(menu.id); }} 
+                                    className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-red-400"
+                                    title="삭제"
+                                >
+                                    <Trash2 size={12}/>
+                                </button>
+                            </div>
+                        </div>
+                        {menu.children && menu.children.length > 0 && expandedMenuIds.includes(menu.id) && (
+                            <div className="bg-black/20 pb-1">
+                                {menu.children.map(child => (
+                                    <div 
+                                        key={child.id} 
+                                        className={`pl-10 pr-4 py-1.5 flex items-center justify-between group/sub cursor-pointer hover:bg-white/5 ${currentMenuId === child.id ? 'text-[#7387ff] font-bold bg-[#7387ff]/10 border-r-2 border-[#7387ff]' : 'text-slate-500'}`}
+                                        onClick={(e) => { e.stopPropagation(); handleMenuChange(child.id, `${menu.name} > ${child.name}`, true); }}
+                                    >
+                                        <span className="text-xs">{child.name}</span>
+                                        <button 
+                                            onClick={(e) => { e.stopPropagation(); confirmDeleteSubMenu(menu.id, child.id); }} 
+                                            className="opacity-0 group-hover/sub:opacity-100 p-0.5 hover:bg-slate-700 rounded text-slate-500 hover:text-red-400"
+                                        >
+                                            <Trash2 size={10}/>
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
-                    {/* Submenu rendering logic omitted for simplicity based on DB structure, can be added if GNB structure supports hierarchy */}
-                </div>
-            ))}
+                ))}
+            </div>
+            <div className="p-4 border-t border-[#2e3038]">
+                <button onClick={() => { setMenuNameInput(''); setModalState({ isOpen: true, type: 'ADD_GNB', data: null }); }} className="w-full py-2 border border-[#2e3038] hover:border-slate-500 rounded text-xs text-slate-400 hover:text-white flex items-center justify-center gap-2 transition-colors">
+                    <Plus size={14}/> 메뉴 추가
+                </button>
+            </div>
         </div>
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0 relative">
         <header className="h-14 border-b border-[#2e3038] bg-[#100d1d]/95 backdrop-blur flex items-center justify-between px-4 z-20">
-          <div className="flex items-center gap-4">
-            <div className="flex bg-[#191b23] p-1 rounded border border-[#2e3038]"><button onClick={() => setViewMode('EDITOR')} className={`px-3 py-1 rounded text-xs font-medium flex items-center gap-2 ${viewMode === 'EDITOR' ? 'bg-[#7387ff] text-white' : 'text-slate-400 hover:text-white'}`}><Layout size={14} /> 편성 에디터</button><button onClick={() => setViewMode('REQUEST')} className={`px-3 py-1 rounded text-xs font-medium flex items-center gap-2 ${viewMode === 'REQUEST' ? 'bg-[#7387ff] text-white' : 'text-slate-400 hover:text-white'}`}><FileText size={14} /> UNA 요청 <span className="bg-slate-700 px-1.5 rounded-full text-[10px]">{savedRequests.length}</span></button></div>
-            <div className="h-4 w-[1px] bg-[#2e3038] mx-1"></div>
-            <div className="text-sm text-[#7387ff] font-bold truncate">{currentMenuPath}</div>
+          <div className="flex items-center gap-3 overflow-hidden mr-4">
+             <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-1 hover:bg-[#2e3038] rounded text-slate-400 hover:text-white transition-colors shrink-0"><Menu size={20}/></button>
+             <div className="text-sm font-bold text-[#7387ff] truncate">{currentMenuPath}</div>
+             {viewMode === 'HISTORY' && historyDate && <span className="text-[10px] bg-yellow-500/20 text-yellow-400 border border-yellow-500/50 px-2 py-0.5 rounded-full flex items-center gap-1 shrink-0"><Rewind size={10}/> {historyDate}</span>}
           </div>
-          <div className="flex items-center gap-2">{viewMode === 'EDITOR' && (<><button onClick={() => setCompareMode(!compareMode)} className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs transition-colors ${compareMode ? 'bg-orange-500/20 text-orange-400 border border-orange-500/50' : 'bg-[#191b23] text-slate-400 border border-[#2e3038]'}`}><ArrowRightLeft size={14} /> {compareMode ? '비교 종료' : '비교 모드'}</button><button onClick={() => setShowInbox(!showInbox)} className={`relative px-3 py-1.5 rounded text-xs flex items-center gap-2 transition-colors ${showInbox ? 'bg-slate-700 text-white' : 'bg-[#191b23] text-slate-400 hover:text-white'}`}><Inbox size={16} /> 프로모션 요청</button><button onClick={handleReset} className="px-3 py-1.5 bg-[#2e3038] hover:bg-[#3e404b] rounded text-xs text-slate-300 flex items-center gap-1 hover:text-white"><RotateCcw size={14} /> 원복</button><button onClick={openAddBlockModal} className="px-3 py-1.5 bg-[#2e3038] hover:bg-[#3e404b] rounded text-xs text-white flex items-center gap-1"><Plus size={14} /> 추가</button><button onClick={handleOpenSaveModal} className="px-3 py-1.5 bg-[#7387ff] hover:bg-[#5b6dbf] rounded text-xs font-bold text-white flex items-center gap-1 shadow-lg shadow-indigo-500/20"><Save size={14} /> 저장</button></>)}</div>
+
+          <div className="flex items-center gap-2 shrink-0">
+             {/* 1. View Mode Switcher (Dropdown for compact) */}
+            <div className="relative">
+                <select 
+                    value={viewMode} 
+                    onChange={(e) => { setViewMode(e.target.value); if(e.target.value === 'HISTORY') setModalState({ isOpen: true, type: 'HISTORY_SELECT' }); else if(e.target.value === 'EDITOR') setHistoryDate(''); }}
+                    className="bg-[#191b23] border border-[#2e3038] hover:border-[#7387ff] rounded px-3 py-1.5 text-xs font-bold text-white outline-none cursor-pointer appearance-none pr-8"
+                >
+                    <option value="EDITOR">편성 에디터</option>
+                    <option value="REQUEST">UNA 요청 ({savedRequests.length})</option>
+                    <option value="HISTORY">히스토리</option>
+                </select>
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                    <ChevronDown size={12} />
+                </div>
+            </div>
+
+            {/* 2. Actions (Responsive) */}
+            {viewMode === 'EDITOR' && (
+                <>
+                    {/* Desktop: Show all */}
+                    <div className="hidden md:flex items-center gap-2">
+                        <button onClick={() => setCompareMode(!compareMode)} className={`flex items-center gap-1 px-3 py-1.5 rounded text-xs transition-colors ${compareMode ? 'bg-orange-500/20 text-orange-400 border border-orange-500/50' : 'bg-[#191b23] text-slate-400 border border-[#2e3038] hover:text-white'}`}>비교</button>
+                        <button onClick={() => setShowInbox(!showInbox)} className={`relative px-3 py-1.5 rounded text-xs flex items-center gap-1 transition-colors ${showInbox ? 'bg-slate-700 text-white' : 'bg-[#191b23] text-slate-400 border border-[#2e3038] hover:text-white'}`}><Inbox size={14} /> 요청함</button>
+                        <button onClick={handleReset} className="px-3 py-1.5 bg-[#191b23] border border-[#2e3038] hover:bg-[#2e3038] rounded text-xs text-slate-400 hover:text-white transition-colors">원복</button>
+                        <button onClick={openAddBlockModal} className="px-3 py-1.5 bg-[#191b23] border border-[#2e3038] hover:bg-[#2e3038] rounded text-xs text-white flex items-center gap-1 transition-colors"><Plus size={14} /> 추가</button>
+                    </div>
+                    
+                    {/* Common: Save Button (Always visible) */}
+                    <button onClick={handleOpenSaveModal} className="bg-[#7387ff] hover:bg-[#5b6dbf] text-white p-1.5 md:px-4 md:py-1.5 rounded text-xs font-bold flex items-center gap-1 shadow-lg shadow-indigo-500/20 transition-colors" title="저장">
+                        <Save size={16} /> <span className="hidden md:inline">저장</span>
+                    </button>
+
+                    {/* Mobile: More Menu */}
+                    <div className="md:hidden relative">
+                        <button onClick={() => setIsActionMenuOpen(!isActionMenuOpen)} className="p-1.5 hover:bg-[#2e3038] rounded text-slate-400 hover:text-white transition-colors"><MoreVertical size={20}/></button>
+                        {isActionMenuOpen && (
+                            <div className="absolute right-0 top-full mt-2 bg-[#191b23] border border-[#2e3038] rounded-lg shadow-xl w-32 overflow-hidden flex flex-col z-50">
+                                <button onClick={() => { setCompareMode(!compareMode); setIsActionMenuOpen(false); }} className="px-4 py-3 text-xs text-left hover:bg-[#2e3038] text-slate-300 border-b border-[#2e3038]">비교 모드 {compareMode ? 'OFF' : 'ON'}</button>
+                                <button onClick={() => { setShowInbox(!showInbox); setIsActionMenuOpen(false); }} className="px-4 py-3 text-xs text-left hover:bg-[#2e3038] text-slate-300 border-b border-[#2e3038]">요청함 열기</button>
+                                <button onClick={() => { handleReset(); setIsActionMenuOpen(false); }} className="px-4 py-3 text-xs text-left hover:bg-[#2e3038] text-slate-300 border-b border-[#2e3038]">원복</button>
+                                <button onClick={() => { openAddBlockModal(); setIsActionMenuOpen(false); }} className="px-4 py-3 text-xs text-left hover:bg-[#2e3038] text-white font-bold">블록 추가</button>
+                            </div>
+                        )}
+                        {isActionMenuOpen && <div className="fixed inset-0 z-40" onClick={() => setIsActionMenuOpen(false)}></div>}
+                    </div>
+                </>
+            )}
+
+            {/* History Mode Actions */}
+            {viewMode === 'HISTORY' && (
+                <button onClick={() => { setViewMode('EDITOR'); setHistoryDate(''); setBlocks(JSON.parse(JSON.stringify(originalBlocks))); }} className="px-3 py-1.5 bg-[#7387ff] hover:bg-[#5b6dbf] rounded text-xs font-bold text-white flex items-center gap-1 transition-colors">복귀</button>
+            )}
+          </div>
         </header>
 
-        {/* EDITOR VIEW */}
-        {viewMode === 'EDITOR' && (
+        {/* EDITOR & HISTORY VIEW */}
+        {(viewMode === 'EDITOR' || viewMode === 'HISTORY') && (
           <div className="flex-1 flex overflow-hidden">
-            <div className="flex-1 overflow-y-auto p-6 relative bg-gradient-to-b from-[#100d1d] to-[#0a0812]">
+            <div className={`flex-1 overflow-y-auto p-6 relative bg-gradient-to-b from-[#100d1d] to-[#0a0812] ${viewMode === 'HISTORY' ? 'grayscale-[0.3]' : ''}`}>
               <div className={`max-w-[1400px] mx-auto transition-all ${compareMode ? 'grid grid-cols-2 gap-8' : ''}`}>
                 {compareMode && (<div className="relative"><div className="sticky top-0 z-10 mb-4 flex justify-between items-center bg-[#100d1d]/80 backdrop-blur py-2 border-b border-orange-500/30"><span className="text-orange-400 text-sm font-bold flex items-center gap-2">변경 전 (As-Is)</span></div><div className="space-y-3 opacity-70 pointer-events-none grayscale-[0.5]">{originalBlocks.map((block, index) => (<div key={`orig-${block.id}`} className="relative"><div className="absolute -left-2 top-2 z-10 w-5 h-5 bg-slate-700 text-slate-400 rounded-full flex items-center justify-center text-xs font-mono">{index + 1}</div><BlockRenderer block={block} isOriginal={true} /></div>))}</div></div>)}
                 <div className={!compareMode ? 'max-w-[800px] mx-auto' : 'relative'}>
                   {compareMode && (<div className="sticky top-0 z-10 mb-4 flex justify-between items-center bg-[#100d1d]/80 backdrop-blur py-2 border-b border-[#7387ff]/30"><span className="text-[#7387ff] text-sm font-bold flex items-center gap-2"><CheckCircle size={14}/> 변경 후 (To-Be)</span></div>)}
                   <div className="space-y-3 pb-20">
                     {blocks.map((block, index) => {
-                      const draggable = isDragEnabled && hoveredBlockIndex === index && !compareMode;
+                      const draggable = isDragEnabled && hoveredBlockIndex === index && !compareMode && viewMode !== 'HISTORY';
                       return (
                         <div key={block.id} draggable={draggable} onDragStart={(e) => onDragStart(e, index)} onDragEnter={(e) => { e.preventDefault(); dragOverItem.current = index; }} onDragEnd={onDragEnd} onDragOver={(e) => e.preventDefault()} onDrop={(e) => onDropFromInbox(e, index)} onMouseEnter={() => setHoveredBlockIndex(index)} onMouseLeave={() => { setHoveredBlockIndex(null); setIsDragEnabled(false); }} className={`relative group transition-all duration-200 ${draggable ? 'cursor-grab active:cursor-grabbing' : ''}`}>
-                          {!compareMode && (<><div onMouseEnter={() => setIsDragEnabled(true)} onMouseLeave={() => setIsDragEnabled(false)} className="absolute -left-10 top-0 bottom-0 w-10 flex items-center justify-center cursor-grab text-slate-600 hover:text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"><GripVertical size={20} /></div><button type="button" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => handleDelete(block.id, e)} className="absolute -right-2 -top-2 z-20 p-1.5 bg-[#2e3038] text-slate-400 hover:text-red-400 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all border border-[#44464f] hover:scale-110 cursor-pointer" title="블록 삭제"><Trash2 size={12} /></button></>)}
+                          {!compareMode && viewMode !== 'HISTORY' && (<><div onMouseEnter={() => setIsDragEnabled(true)} onMouseLeave={() => setIsDragEnabled(false)} className="absolute -left-10 top-0 bottom-0 w-10 flex items-center justify-center cursor-grab text-slate-600 hover:text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"><GripVertical size={20} /></div><button type="button" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => handleDelete(block.id, e)} className="absolute -right-2 -top-2 z-20 p-1.5 bg-[#2e3038] text-slate-400 hover:text-red-400 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all border border-[#44464f] hover:scale-110 cursor-pointer" title="블록 삭제"><Trash2 size={12} /></button></>)}
                           <div className={`absolute -left-2 top-2 z-10 w-5 h-5 rounded-full flex items-center justify-center text-xs font-mono font-bold shadow-lg ${compareMode ? 'bg-[#7387ff] text-white' : 'bg-[#191b23] border border-[#7387ff] text-[#7387ff]'}`}>{index + 1}</div>
-                          <BlockRenderer block={block} isOriginal={false} onUpdate={(updates) => handleUpdateBlock(block.id, updates)} onEditId={(tabIndex) => openEditIdModal(block, tabIndex)} onEditBannerId={(data, idx, isLead, tabIdx) => handleBannerEdit(block, data, idx, isLead, tabIdx)} onEditContentId={(item, idx) => handleEditContent(block.id, idx, item)} onEditTabName={(idx, name) => handleEditTabName(block.id, idx, name)} onAddTab={() => handleAddTab(block.id)} />
+                          <BlockRenderer block={block} isOriginal={false} readOnly={viewMode === 'HISTORY'} onUpdate={(updates) => handleUpdateBlock(block.id, updates)} onEditId={(tabIndex) => openEditIdModal(block, tabIndex)} onEditBannerId={(data, idx, isLead, tabIdx) => handleBannerEdit(block, data, idx, isLead, tabIdx)} onEditContentId={(item, idx) => handleEditContent(block.id, idx, item)} onEditTabName={(idx, name) => handleEditTabName(block.id, idx, name)} onAddTab={() => handleAddTab(block.id)} />
                         </div>
                       );
                     })}
-                    {!compareMode && (<div onClick={openAddBlockModal} onDragOver={(e) => e.preventDefault()} onDrop={(e) => onDropFromInbox(e)} className="h-20 border-2 border-dashed border-[#2e3038] rounded-xl flex flex-col items-center justify-center text-slate-500 hover:border-[#7387ff] hover:text-[#7387ff] hover:bg-[#7387ff]/5 cursor-pointer transition-all gap-1 mt-4"><Plus size={20} /><span className="text-xs font-bold">블록 추가 또는 요청 드래그</span></div>)}
+                    {!compareMode && viewMode !== 'HISTORY' && (<div onClick={openAddBlockModal} onDragOver={(e) => e.preventDefault()} onDrop={(e) => onDropFromInbox(e)} className="h-20 border-2 border-dashed border-[#2e3038] rounded-xl flex flex-col items-center justify-center text-slate-500 hover:border-[#7387ff] hover:text-[#7387ff] hover:bg-[#7387ff]/5 cursor-pointer transition-all gap-1 mt-4"><Plus size={20} /><span className="text-xs font-bold">블록 추가 또는 요청 드래그</span></div>)}
                   </div>
                 </div>
               </div>
@@ -1017,9 +1477,9 @@ export default function App() {
                    <select className="bg-[#100d1d] border border-[#2e3038] rounded px-2 py-1 text-xs text-slate-300 outline-none flex-1" value={inboxFilter} onChange={(e) => setInboxFilter(e.target.value)}>
                       <option value="ALL">전체 메뉴</option>
                       {gnbList.map(m => (
-                         <React.Fragment key={m.id}>
-                           <option value={m.name}>{m.name}</option>
-                         </React.Fragment>
+                          <React.Fragment key={m.id}>
+                            <option value={m.name}>{m.name}</option>
+                          </React.Fragment>
                       ))}
                    </select>
                 </div>
@@ -1049,8 +1509,8 @@ export default function App() {
                         </div>
                         <div className="flex-1 p-8 overflow-y-auto bg-[#100d1d]">
                            <div className="grid grid-cols-2 gap-8 max-w-[1200px] mx-auto">
-                               <div className="relative opacity-60 grayscale-[0.5] pointer-events-none"><div className="sticky top-0 z-10 mb-6 flex justify-center"><span className="bg-orange-500/20 text-orange-400 border border-orange-500/50 px-3 py-1 rounded-full text-xs font-bold">변경 전 (As-Is)</span></div><div className="space-y-4">{viewRequest.originalSnapshot?.map((block, i) => <BlockRenderer key={i} block={block} isDragging={false} isOriginal={true} />)}</div></div>
-                               <div className="relative"><div className="sticky top-0 z-10 mb-6 flex justify-center"><span className="bg-[#7387ff]/20 text-[#7387ff] border border-[#7387ff]/50 px-3 py-1 rounded-full text-xs font-bold">변경 후 (To-Be)</span></div><div className="space-y-4">{viewRequest.snapshot?.map((block, i) => <BlockRenderer key={i} block={block} isDragging={false} isOriginal={false} />)}</div></div>
+                               <div className="relative opacity-60 grayscale-[0.5] pointer-events-none"><div className="sticky top-0 z-10 mb-6 flex justify-center"><span className="bg-orange-500/20 text-orange-400 border border-orange-500/50 px-3 py-1 rounded-full text-xs font-bold">변경 전 (As-Is)</span></div><div className="space-y-4">{viewRequest.originalSnapshot?.map((block, i) => <BlockRenderer key={i} block={block} isDragging={false} isOriginal={true} readOnly={true} />)}</div></div>
+                               <div className="relative"><div className="sticky top-0 z-10 mb-6 flex justify-center"><span className="bg-[#7387ff]/20 text-[#7387ff] border border-[#7387ff]/50 px-3 py-1 rounded-full text-xs font-bold">변경 후 (To-Be)</span></div><div className="space-y-4">{viewRequest.snapshot?.map((block, i) => <BlockRenderer key={i} block={block} isDragging={false} isOriginal={false} readOnly={true} />)}</div></div>
                            </div>
                         </div>
                     </div>
@@ -1080,7 +1540,7 @@ export default function App() {
                                   <button onClick={(e) => reqDeleteRequest(req.id, e)} className="absolute top-4 right-4 text-slate-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity z-10 p-1 hover:bg-[#2e3038] rounded" title="요청서 삭제"><Trash2 size={16} /></button>
                                   <div className="flex justify-between items-start mb-4"><span className={`text-[10px] px-2 py-1 rounded font-bold ${req.status === 'APPROVED' ? 'bg-green-900/30 text-green-400' : 'bg-yellow-900/30 text-yellow-400'}`}>{req.status}</span><span className="text-slate-500 text-xs">{req.createdAt}</span></div>
                                   <h3 className="text-lg font-bold text-white mb-2 group-hover:text-[#7387ff] transition-colors">{req.title}</h3>
-                                  <div className="space-y-1 text-sm text-slate-400 mb-4"><div className="flex items-center gap-2"><Calendar size={14}/> {req.date} 반영</div><div className="flex items-center gap-2"><User size={14}/> {req.requester}</div></div>
+                                  <div className="space-y-1 text-sm text-slate-400 mb-4"><div className="flex items-center gap-2"><CalendarIcon size={14}/> {req.date} 반영</div><div className="flex items-center gap-2"><User size={14}/> {req.requester}</div></div>
                                   <div className="pt-4 border-t border-[#2e3038] flex justify-between items-center text-xs text-slate-500"><span>변경사항 {req.changes.length}건</span><span className="flex items-center gap-1 group-hover:text-white transition-colors">상세보기 <ArrowRight size={12}/></span></div>
                                   {req.menuPath && <div className="mt-2 text-[9px] text-slate-600 bg-slate-800 px-2 py-0.5 rounded w-fit">{req.menuPath}</div>}
                               </div>
@@ -1095,14 +1555,57 @@ export default function App() {
         {/* Modal */}
         {modalState.isOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-            <div className={`bg-[#191b23] rounded-xl border border-[#2e3038] shadow-2xl overflow-hidden flex flex-col max-h-[85vh] ${modalState.type === 'NEW_REQUEST' || modalState.type === 'ADD_BLOCK' ? 'w-[500px]' : 'w-[450px]'}`}>
+            <div className={`bg-[#191b23] rounded-xl border border-[#2e3038] shadow-2xl overflow-hidden flex flex-col max-h-[85vh] ${modalState.type === 'NEW_REQUEST' || modalState.type === 'ADD_BLOCK' || modalState.type === 'HISTORY_SELECT' ? 'w-[500px]' : 'w-[450px]'}`}>
               <div className="p-5 border-b border-[#2e3038] flex justify-between items-center bg-[#1e2029] shrink-0">
                 <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  {modalState.type === 'NEW_REQUEST' ? '신규 프로모션 요청 등록' : modalState.type === 'ADD_BLOCK' ? '신규 블록 생성' : modalState.type === 'SAVE' ? '편성 요청 정보 입력' : modalState.type === 'APPROVE' ? '편성 반영 확인' : modalState.type === 'EDIT_ID' ? '블록 설정 수정' : modalState.type === 'EDIT_BANNER' ? '배너 수정' : modalState.type === 'EDIT_CONTENT' ? '콘텐츠 수정' : modalState.type === 'EDIT_TAB_NAME' ? '탭 이름 수정' : modalState.type === 'DELETE_BANNER_CONFIRM' ? '삭제 확인' : '확인'}
+                  {modalState.type === 'HISTORY_SELECT' ? '히스토리 탐색' : modalState.type === 'NEW_REQUEST' ? '신규 프로모션 요청 등록' : modalState.type === 'ADD_BLOCK' ? '신규 블록 생성' : modalState.type === 'SAVE' ? '편성 요청 정보 입력' : modalState.type === 'APPROVE' ? '편성 반영 확인' : modalState.type === 'EDIT_ID' ? '블록 설정 수정' : modalState.type === 'EDIT_BANNER' ? '배너 수정' : modalState.type === 'EDIT_CONTENT' ? '콘텐츠 수정' : modalState.type === 'EDIT_TAB_NAME' ? '탭 이름 수정' : modalState.type === 'ADD_GNB' ? '최상위 메뉴 추가' : modalState.type === 'ADD_SUBMENU' ? '하위 메뉴 추가' : modalState.type === 'DELETE_BANNER_CONFIRM' ? '삭제 확인' : '확인'}
                 </h3>
                 <button onClick={() => setModalState({ ...modalState, isOpen: false })}><X size={18} className="text-slate-500 hover:text-white"/></button>
               </div>
               <div className="p-6 overflow-y-auto">
+                  {/* HISTORY SELECT MODAL WITH CALENDAR */}
+                  {modalState.type === 'HISTORY_SELECT' && (
+                      <div className="space-y-4">
+                          <p className="text-sm text-slate-400 mb-2">확인하고 싶은 과거 날짜를 선택해주세요.</p>
+                          <div className="bg-[#100d1d] border border-[#2e3038] rounded-lg p-4">
+                              <div className="flex justify-between items-center mb-4">
+                                  <button onClick={handlePrevMonth} className="p-1 hover:bg-[#2e3038] rounded text-slate-400 hover:text-white"><ChevronLeft size={16}/></button>
+                                  <span className="text-sm font-bold text-white">{currentCalendarDate.getFullYear()}년 {currentCalendarDate.getMonth() + 1}월</span>
+                                  <button onClick={handleNextMonth} className="p-1 hover:bg-[#2e3038] rounded text-slate-400 hover:text-white"><ChevronRight size={16}/></button>
+                              </div>
+                              <div className="grid grid-cols-7 gap-1 text-center text-xs text-slate-500 mb-2">
+                                  <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+                              </div>
+                              <div className="grid grid-cols-7 gap-1">
+                                  {renderCalendar()}
+                              </div>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-slate-500 mt-2">
+                              <div className="w-2 h-2 bg-[#7387ff] rounded-full"></div>
+                              <span>변경 이력이 있는 날짜</span>
+                          </div>
+                      </div>
+                  )}
+
+                  {/* ADD MENU MODAL */}
+                  {(modalState.type === 'ADD_GNB' || modalState.type === 'ADD_SUBMENU') && (
+                      <div className="space-y-4">
+                          <div>
+                              <label className="block text-xs font-bold text-slate-500 mb-1">{modalState.type === 'ADD_GNB' ? 'GNB 메뉴 이름' : '하위 메뉴 이름'}</label>
+                              <input 
+                                  type="text" 
+                                  className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" 
+                                  value={menuNameInput} 
+                                  onChange={e => setMenuNameInput(e.target.value)} 
+                                  placeholder="메뉴 이름 입력" 
+                                  autoFocus 
+                                  onKeyDown={(e) => { if(e.key === 'Enter') handleAddMenu(); }}
+                              />
+                          </div>
+                      </div>
+                  )}
+
+                  {/* ... (이하 다른 모달 코드는 동일) */}
                   {/* NEW REQUEST FORM - Extended Fields */}
                   {modalState.type === 'NEW_REQUEST' && (
                     <div className="space-y-4">
@@ -1320,13 +1823,14 @@ export default function App() {
               </div>
               <div className="p-4 bg-[#161820] flex justify-end gap-2 border-t border-[#2e3038] shrink-0">
                 {modalState.type === 'EDIT_BANNER' && <button onClick={confirmDeleteBanner} className="mr-auto px-4 py-2 rounded text-red-400 text-xs font-bold hover:bg-red-900/20 border border-red-900/50">삭제</button>}
-                {modalState.type !== 'EDIT_TAB_NAME' && modalState.type !== 'EDIT_CONTENT' && <button onClick={() => setModalState({ ...modalState, isOpen: false })} className="px-4 py-2 rounded text-slate-400 text-xs font-bold hover:bg-[#2e3038]">취소</button>}
-                {modalState.type !== 'EDIT_TAB_NAME' && modalState.type !== 'EDIT_CONTENT' && <button 
-                  onClick={modalState.type === 'NEW_REQUEST' ? handleCreateRequest : modalState.type === 'ADD_BLOCK' ? confirmAddBlock : modalState.type === 'EDIT_ID' ? saveEditedId : modalState.type === 'EDIT_BANNER' ? saveEditedBanner : handleConfirmAction} 
+                {modalState.type !== 'EDIT_TAB_NAME' && modalState.type !== 'EDIT_CONTENT' && modalState.type !== 'ADD_GNB' && modalState.type !== 'ADD_SUBMENU' && modalState.type !== 'HISTORY_SELECT' && <button onClick={() => setModalState({ ...modalState, isOpen: false })} className="px-4 py-2 rounded text-slate-400 text-xs font-bold hover:bg-[#2e3038]">취소</button>}
+                {modalState.type !== 'EDIT_TAB_NAME' && modalState.type !== 'EDIT_CONTENT' && modalState.type !== 'HISTORY_SELECT' && <button 
+                  onClick={modalState.type === 'NEW_REQUEST' ? handleCreateRequest : modalState.type === 'ADD_BLOCK' ? confirmAddBlock : modalState.type === 'EDIT_ID' ? saveEditedId : modalState.type === 'EDIT_BANNER' ? saveEditedBanner : modalState.type === 'ADD_GNB' || modalState.type === 'ADD_SUBMENU' ? handleAddMenu : handleConfirmAction} 
                   className={`px-6 py-2 rounded text-white text-xs font-bold shadow-lg ${modalState.type === 'DELETE_BANNER_CONFIRM' ? 'bg-red-600 hover:bg-red-500' : modalState.type === 'EDIT_BANNER' || (modalState.type === 'ADD_BLOCK' && blockCategory === 'BANNER') ? 'bg-orange-600 hover:bg-orange-500' : 'bg-[#7387ff] hover:bg-[#5b6dbf]'}`}
                 >
                   {modalState.type === 'DELETE_BANNER_CONFIRM' ? '삭제 확인' : '확인'}
                 </button>}
+                {modalState.type === 'HISTORY_SELECT' && <button onClick={() => setModalState({ ...modalState, isOpen: false })} className="px-4 py-2 rounded text-slate-400 text-xs font-bold hover:bg-[#2e3038]">닫기</button>}
               </div>
             </div>
           </div>
