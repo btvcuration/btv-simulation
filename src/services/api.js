@@ -5,7 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 // ★★★ 여기가 핵심 스위치입니다 ★★★
 // true: Supabase 연결 안 하고 가짜 데이터 사용 (에러 해결용)
 // false: 실제 Supabase DB 연결
-export const USE_MOCK_DATA = true; 
+export const USE_MOCK_DATA = false; 
 
 // --- Supabase 설정 ---
 const supabaseUrl = 'https://zzzgixizyafwatdmvuxc.supabase.co';
