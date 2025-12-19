@@ -6,7 +6,7 @@ import {
   Inbox, User, ExternalLink, RotateCcw, Calendar as CalendarIcon, Clock, ChevronLeft, Tv, Film, PlayCircle, BookOpen, MessageSquare, Ban,
   Eye, EyeOff, Database, Layers, Hash, Edit3, AlertTriangle, Link, MousePointer, Image as ImageIcon,
   MousePointerClick, Image, Tag, PlusCircle, MoreHorizontal, GripHorizontal, Target, StickyNote, Settings, Upload, Link2, Box, Filter,
-  Menu, History, Rewind, MoreVertical, Minus
+  Menu, History, Rewind, MoreVertical, Minus, Users
 } from 'lucide-react';
 
 // ==========================================
@@ -14,7 +14,7 @@ import {
 // true: 가짜 데이터 사용 (UI 테스트용)
 // false: 실제 Supabase DB 연동 (상용화용)
 // ==========================================
-const USE_MOCK_DATA = false;
+const USE_MOCK_DATA = true;
 
 // --- Supabase Config ---
 const supabaseUrl = 'https://zzzgixizyafwatdmvuxc.supabase.co';
@@ -47,26 +47,26 @@ const mockSupabase = {
 // --- Mock Initial Data ---
 const INITIAL_GNB_TREE = [
     { 
-        id: '1', name: '홈', children: [] 
+        id: '1', name: '홈', slug: 'home', children: [] 
     },
     { 
-        id: '2', name: '영화', children: [
-            { id: '2-1', name: '추천 영화' },
-            { id: '2-2', name: '신작' },
-            { id: 'div-1', name: '---' }, // 구분선 예시
-            { id: '2-3', name: '장르별' }
+        id: '2', name: '영화', slug: 'movie', children: [
+            { id: '2-1', name: '추천 영화', slug: 'rec-movie' },
+            { id: '2-2', name: '신작', slug: 'new-movie' },
+            { id: 'div-1', name: '---', slug: 'div-1' }, // 구분선 예시
+            { id: '2-3', name: '장르별', slug: 'genre-movie' }
         ] 
     },
     { 
-        id: '3', name: 'TV다시보기', children: [
-            { id: '3-1', name: '전체' },
-            { id: '3-2', name: 'KBS' },
-            { id: '3-3', name: 'MBC' },
-            { id: '3-4', name: 'SBS' }
+        id: '3', name: 'TV다시보기', slug: 'tv-replay', children: [
+            { id: '3-1', name: '전체', slug: 'tv-all' },
+            { id: '3-2', name: 'KBS', slug: 'tv-kbs' },
+            { id: '3-3', name: 'MBC', slug: 'tv-mbc' },
+            { id: '3-4', name: 'SBS', slug: 'tv-sbs' }
         ] 
     },
-    { id: '4', name: '키즈', children: [] },
-    { id: '5', name: '다큐', children: [] }
+    { id: '4', name: '키즈', slug: 'kids', children: [] },
+    { id: '5', name: '다큐', slug: 'docu', children: [] }
 ];
 
 const MOCK_BLOCKS = [
@@ -135,7 +135,7 @@ const MOCK_HISTORY_DATA = {
 
 const MOCK_REQUESTS = [
     { 
-        id: 'r1', requester: '김편성', title: '신규 영화 블록 추가 요청', desc: '이번 주 신작 영화 소개를 위한 블록 추가', type: 'VERTICAL', gnb: '홈', status: 'PENDING', location: '상단', remarks: '급함', createdAt: '2023-11-01', changes: [{type: '신규', desc: '신규 블록 추가됨'}],
+        id: 'r1', requester: '김편성', team: '편성1팀', title: '신규 영화 블록 추가 요청', desc: '이번 주 신작 영화 소개를 위한 블록 추가', type: 'VERTICAL', gnb: '홈', status: 'PENDING', location: '상단', remarks: '급함', createdAt: '2023-11-01', changes: [{type: '신규', desc: '신규 블록 추가됨'}],
         originalSnapshot: JSON.parse(JSON.stringify(MOCK_BLOCKS)), 
         snapshot: JSON.parse(JSON.stringify([
             { ...MOCK_BLOCKS[0] },
@@ -144,11 +144,21 @@ const MOCK_REQUESTS = [
         ]))
     },
     { 
-        id: 'r2', requester: '이마케팅', title: '이벤트 배너 교체', desc: '봄맞이 할인 이벤트 배너', type: 'BIG_BANNER', gnb: '영화', status: 'PENDING', location: '중단', createdAt: '2023-11-02', changes: [{type: '수정', desc: '배너 이미지 교체됨'}],
+        id: 'r2', requester: '이마케팅', team: '마케팅팀', title: '이벤트 배너 교체', desc: '봄맞이 할인 이벤트 배너', type: 'BIG_BANNER', gnb: '영화', status: 'PENDING', location: '중단', createdAt: '2023-11-02', changes: [{type: '수정', desc: '배너 이미지 교체됨'}],
         originalSnapshot: JSON.parse(JSON.stringify(MOCK_BLOCKS)),
         snapshot: JSON.parse(JSON.stringify(MOCK_BLOCKS))
     }
 ];
+
+// Helper to generate slug
+const generateSlug = (name) => {
+    // 한글이 포함된 경우 랜덤 문자열 조합, 영문인 경우 소문자 변환
+    const isKorean = /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(name);
+    if (isKorean || name === '---') {
+        return `menu-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    }
+    return name.toLowerCase().replace(/\s+/g, '-') + `-${Date.now().toString().slice(-4)}`;
+};
 
 // Mock Hook Implementation
 const useBtvData = (supabase, viewMode) => {
@@ -257,7 +267,7 @@ const useBtvData = (supabase, viewMode) => {
             
             if (data) {
                 const formattedRequests = data.map(r => ({
-                    id: r.id, title: r.title, requester: r.requester, gnb: r.gnb_target, type: 'VERTICAL', 
+                    id: r.id, title: r.title, requester: r.requester, team: r.team, gnb: r.gnb_target, type: 'VERTICAL', 
                     desc: r.description, location: r.location, status: r.status, 
                     date: new Date(r.created_at).toLocaleDateString(),
                     createdAt: new Date(r.created_at).toLocaleString(),
@@ -297,20 +307,23 @@ const useBtvData = (supabase, viewMode) => {
     };
 
     const addGnb = async (name) => {
+        const slug = generateSlug(name);
         if (USE_MOCK_DATA) {
-            const newGnb = { id: `gnb-${Date.now()}`, name, children: [] };
+            const newGnb = { id: `gnb-${Date.now()}`, name, slug, children: [] };
             setGnbList([...gnbList, newGnb]);
         } else {
-            const { data, error } = await supabase.from('gnb_menus').insert({ name, sort_order: gnbList.length }).select();
+            const { data, error } = await supabase.from('gnb_menus').insert({ name, slug, sort_order: gnbList.length }).select();
             if(data) fetchGnb();
+            else console.error("GNB Add Error:", error);
         }
     };
 
     const addSubMenu = async (parentId, name) => {
+        const slug = generateSlug(name);
         if (USE_MOCK_DATA) {
             setGnbList(gnbList.map(item => {
                 if (item.id === parentId) {
-                    return { ...item, children: [...(item.children || []), { id: `sub-${Date.now()}`, name }] };
+                    return { ...item, children: [...(item.children || []), { id: `sub-${Date.now()}`, name, slug }] };
                 }
                 return item;
             }));
@@ -318,11 +331,11 @@ const useBtvData = (supabase, viewMode) => {
         } else {
             const parent = gnbList.find(g => g.id === parentId);
             const sortOrder = parent ? parent.children.length : 0;
-            const { data, error } = await supabase.from('gnb_menus').insert({ name, parent_id: parentId, sort_order: sortOrder }).select();
+            const { data, error } = await supabase.from('gnb_menus').insert({ name, slug, parent_id: parentId, sort_order: sortOrder }).select();
             if(data) {
                 fetchGnb(); 
                 if (!expandedMenuIds.includes(parentId)) setExpandedMenuIds([...expandedMenuIds, parentId]);
-            }
+            } else console.error("Submenu Add Error:", error);
         }
     };
 
@@ -348,6 +361,7 @@ const useBtvData = (supabase, viewMode) => {
                 setGnbList(newList);
             }
         } else {
+            // DB Reorder Logic placeholder
             alert("상용 DB 모드에서는 순서 변경이 즉시 저장되지 않을 수 있습니다 (데모).");
         }
     }
@@ -858,7 +872,7 @@ export default function App() {
     }
   }, []);
 
-  const { gnbList, currentMenuPath, currentMenuId, expandedMenuIds, toggleExpand, addGnb, deleteGnb, addSubMenu, deleteSubMenu, reorderMenu, blocks, setBlocks, originalBlocks, setOriginalBlocks, requests, setRequests, savedRequests, setSavedRequests, isLoading, handleMenuChange } = useBtvData(supabase, viewMode);
+  const { gnbList, setGnbList, currentMenuPath, currentMenuId, expandedMenuIds, toggleExpand, addGnb, deleteGnb, addSubMenu, deleteSubMenu, reorderMenu, blocks, setBlocks, originalBlocks, setOriginalBlocks, requests, setRequests, savedRequests, setSavedRequests, isLoading, handleMenuChange } = useBtvData(supabase, viewMode);
   
   const [viewRequest, setViewRequest] = useState(null);
   const [historyDate, setHistoryDate] = useState('');
@@ -874,7 +888,7 @@ export default function App() {
   const [scheduleDate, setScheduleDate] = useState('');
   const [requestTitle, setRequestTitle] = useState('');
   const [diffSummary, setDiffSummary] = useState([]);
-  const [newRequestData, setNewRequestData] = useState({ requester: '', headline: '', location: '', desc: '', remarks: '', type: 'VERTICAL', jiraLink: '', gnb: '홈' }); 
+  const [newRequestData, setNewRequestData] = useState({ requester: '', team: '', headline: '', location: '', desc: '', remarks: '', type: 'VERTICAL', jiraLink: '', gnb: '홈' }); 
   const [menuNameInput, setMenuNameInput] = useState('');
   const [isDivider, setIsDivider] = useState(false);
   const [currentCalendarDate, setCurrentCalendarDate] = useState(new Date('2023-10-01'));
@@ -945,7 +959,7 @@ export default function App() {
   const saveTabName = () => { const { blockId, tabIndex, name } = editTabNameData; setBlocks(prev => prev.map(b => { if (b.id !== blockId) return b; const newTabs = [...b.tabs]; newTabs[tabIndex] = { ...newTabs[tabIndex], name }; return { ...b, tabs: newTabs }; })); setModalState({ ...modalState, isOpen: false }); };
   const handleOpenSaveModal = () => { const today = new Date(); today.setDate(today.getDate() + 3); setScheduleDate(today.toISOString().split('T')[0]); setRequestTitle(`[편성요청] ${currentMenuPath} 정기 개편`); const diffs = generateDiffs(); setDiffSummary(diffs.length > 0 ? diffs : [{ type: '알림', block: { title: '-' }, desc: '변경 사항이 없습니다.' }]); setModalState({ isOpen: true, type: 'SAVE', data: null }); };
   
-  const handleCreateRequest = async () => { if (!newRequestData.headline || !newRequestData.requester) return alert('요청자 및 제목을 입력해주세요.'); if (USE_MOCK_DATA) { alert('(Mock) 요청이 등록되었습니다. (실제 DB 저장 X)'); const mockNewReq = { id: `req-${Date.now()}`, requester: newRequestData.requester, title: newRequestData.headline, gnb: newRequestData.gnb, desc: newRequestData.desc, location: newRequestData.location, status: 'PENDING', type: newRequestData.type, remarks: newRequestData.remarks }; setRequests(prev => [mockNewReq, ...prev]); setModalState({ ...modalState, isOpen: false }); return; } if (!supabase) return; const { error } = await supabase.from('requests').insert({ requester: newRequestData.requester, title: newRequestData.headline, gnb_target: newRequestData.gnb, description: newRequestData.desc, location: newRequestData.location, status: 'PENDING' }); if(!error) { alert('요청이 등록되었습니다.'); window.location.reload(); } else { alert('요청 등록 실패'); } setModalState({ ...modalState, isOpen: false }); };
+  const handleCreateRequest = async () => { if (!newRequestData.headline || !newRequestData.requester) return alert('요청자 및 제목을 입력해주세요.'); if (USE_MOCK_DATA) { alert('(Mock) 요청이 등록되었습니다. (실제 DB 저장 X)'); const mockNewReq = { id: `req-${Date.now()}`, requester: newRequestData.requester, team: newRequestData.team, title: newRequestData.headline, gnb: newRequestData.gnb, desc: newRequestData.desc, location: newRequestData.location, status: 'PENDING', type: newRequestData.type, remarks: newRequestData.remarks }; setRequests(prev => [mockNewReq, ...prev]); setModalState({ ...modalState, isOpen: false }); return; } if (!supabase) return; const { error } = await supabase.from('requests').insert({ requester: newRequestData.requester, team: newRequestData.team, title: newRequestData.headline, gnb_target: newRequestData.gnb, description: newRequestData.desc, location: newRequestData.location, status: 'PENDING' }); if(!error) { alert('요청이 등록되었습니다.'); window.location.reload(); } else { alert('요청 등록 실패'); } setModalState({ ...modalState, isOpen: false }); };
   const handleAddMenu = () => { 
       const { parentId } = modalState.data || {}; 
       const nameToAdd = isDivider ? '---' : menuNameInput;
@@ -1046,7 +1060,7 @@ export default function App() {
         else {
             if (!supabase) return;
             await supabase.from('blocks').delete().eq('gnb_id', currentMenuId);
-            const newBlocksData = data.snapshot.map((b, idx) => ({ gnb_id: currentMenuId, type: b.type, title: b.title, block_id_code: b.blockId, show_title: b.showTitle, sort_order: idx, content: { items: b.items, banners: b.banners, tabs: b.tabs, leadingBanners: b.leadingBanners, showPreview: b.showPreview, contentId: b.contentId, contentIdType: b.contentIdType, isTarget: b.isTarget, targetSeg: b.targetSeg, remarks: b.remarks } }));
+            const newBlocksData = data.snapshot.map((b, idx) => ({ gnb_id: currentMenuId, type: b.type, title: b.title, block_id_code: b.blockId, show_title: b.show_title, sort_order: idx, content: { items: b.items, banners: b.banners, tabs: b.tabs, leadingBanners: b.leadingBanners, showPreview: b.showPreview, contentId: b.contentId, contentIdType: b.contentIdType, isTarget: b.isTarget, targetSeg: b.targetSeg, remarks: b.remarks } }));
             const { error } = await supabase.from('blocks').insert(newBlocksData);
             if(!error) { await supabase.from('requests').update({ status: 'APPROVED' }).eq('id', data.id); alert('반영되었습니다!'); window.location.reload(); }
         }
@@ -1222,6 +1236,7 @@ export default function App() {
                 </div>
               </div>
             </div>
+            {/* Inbox */}
             <div className={`fixed right-0 top-14 bottom-0 w-80 bg-[#161820] border-l border-[#2e3038] shadow-2xl transition-transform duration-300 z-30 flex flex-col ${showInbox ? 'translate-x-0' : 'translate-x-full'}`}>
               <div className="p-4 border-b border-[#2e3038] bg-[#191b23]">
                 <div className="flex justify-between items-center mb-4"><h3 className="text-sm font-bold text-white flex items-center gap-2"><Inbox size={16} className="text-[#7387ff]" /> 프로모션 요청 <span className="bg-red-500 text-white text-[10px] px-1.5 rounded-full">{filteredRequests.length}</span></h3><button onClick={() => setShowInbox(false)}><X size={16} className="text-slate-500 hover:text-white"/></button></div>
@@ -1269,7 +1284,10 @@ export default function App() {
                   {modalState.type === 'NEW_REQUEST' && (
                     <div className="space-y-4">
                       <div><label className="block text-xs font-bold text-slate-500 mb-1">GNB 메뉴 (대상)</label><select className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newRequestData.gnb} onChange={e => setNewRequestData({...newRequestData, gnb: e.target.value})}>{gnbList.map(m => (<React.Fragment key={m.id}><option value={m.name}>{m.name}</option></React.Fragment>))}</select></div>
-                      <div><label className="block text-xs font-bold text-slate-500 mb-1">요청자</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newRequestData.requester} onChange={e => setNewRequestData({...newRequestData, requester: e.target.value})} placeholder="요청자 이름" /></div>
+                      <div className="grid grid-cols-2 gap-4">
+                          <div><label className="block text-xs font-bold text-slate-500 mb-1">요청자</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newRequestData.requester} onChange={e => setNewRequestData({...newRequestData, requester: e.target.value})} placeholder="요청자 이름" /></div>
+                          <div><label className="block text-xs font-bold text-slate-500 mb-1">소속 팀</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newRequestData.team} onChange={e => setNewRequestData({...newRequestData, team: e.target.value})} placeholder="예: 편성1팀" /></div>
+                      </div>
                       <div><label className="block text-xs font-bold text-slate-500 mb-1">제목</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newRequestData.headline} onChange={e => setNewRequestData({...newRequestData, headline: e.target.value})} placeholder="요청 제목 입력"/></div>
                       <div><label className="block text-xs font-bold text-slate-500 mb-1">편성 유형</label><select className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newRequestData.type} onChange={e => setNewRequestData({...newRequestData, type: e.target.value})}><optgroup label="콘텐츠 블록"><option value="VERTICAL">세로 포스터</option><option value="HORIZONTAL">가로 포스터</option><option value="HORIZONTAL_MINI">미니 가로</option><option value="TAB">탭 블록</option><option value="MULTI">멀티 블록</option></optgroup><optgroup label="배너"><option value="BIG_BANNER">빅배너</option><option value="BAND_BANNER">띠배너</option><option value="LONG_BANNER">롱배너</option><option value="BANNER_1">1단 배너</option><option value="BANNER_2">2단 배너</option><option value="BANNER_3">3단 배너</option></optgroup></select></div>
                       <div><label className="block text-xs font-bold text-slate-500 mb-1">편성 요청 위치</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newRequestData.location} onChange={e => setNewRequestData({...newRequestData, location: e.target.value})} placeholder="예: TV 방송 홈 상단"/></div>
