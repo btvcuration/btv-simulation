@@ -14,7 +14,7 @@ import {
 // true: 가짜 데이터 사용 (UI 테스트용)
 // false: 실제 Supabase DB 연동 (상용화용)
 // ==========================================
-const USE_MOCK_DATA = false;
+const USE_MOCK_DATA = true;
 
 // --- Supabase Config ---
 const supabaseUrl = 'https://zzzgixizyafwatdmvuxc.supabase.co';
@@ -116,9 +116,26 @@ const MOCK_BLOCKS = [
   }
 ];
 
+const MOCK_HISTORY_DATA = {
+    '2023-10-01': [
+        { id: 'h-oct1-1', type: 'TODAY_BTV', title: 'Today B tv (10/1)', items: [{ title: '10월의 시작' }] },
+        { id: 'h-oct1-2', type: 'VERTICAL', title: '10월 신작', items: [{ title: '영화 A' }] }
+    ],
+    '2023-10-15': [
+        { id: 'h-oct15-1', type: 'TODAY_BTV', title: 'Today B tv (10/15 변경)', items: [{ title: '가을 특선' }, { title: '단풍놀이' }] },
+        { id: 'h-oct15-2', type: 'VERTICAL', title: '10월 인기작', items: [{ title: '영화 B' }, { title: '영화 C' }] },
+        { id: 'h-oct15-3', type: 'BIG_BANNER', title: '중간 광고', banners: [{ title: '할인 이벤트' }] }
+    ],
+    '2023-10-25': [
+        { id: 'h-oct25-1', type: 'TODAY_BTV', title: 'Today B tv (10/25 변경)', items: [{ title: '할로윈 주간' }] },
+        { id: 'h-oct25-2', type: 'BIG_BANNER', title: '할로윈 특집', banners: [{ title: '공포 영화 50% 할인', desc: '무서운 영화 모음' }] },
+        { id: 'h-oct25-3', type: 'HORIZONTAL', title: '가족과 함께', items: [{ title: '코코' }, { title: '몬스터 주식회사' }] }
+    ]
+};
+
 const MOCK_REQUESTS = [
     { 
-        id: 'r1', requester: '김편성', team: '편성1팀', title: '신규 영화 블록 추가 요청', desc: '이번 주 신작 영화 소개를 위한 블록 추가', type: 'VERTICAL', gnb: '홈', status: 'PENDING', location: '상단', remarks: '급함', createdAt: '2023-11-01', changes: [{type: '신규', desc: '신규 블록 추가됨'}],
+        id: 'r1', requester: '김편성', team: '편성1팀', title: '신규 영화 블록 추가 요청', desc: '이번 주 신작 영화 소개를 위한 블록 추가', type: 'VERTICAL', gnb: '홈', menuPath: '홈', status: 'PENDING', location: '상단', remarks: '급함', createdAt: '2023-11-01', changes: [{type: '신규', desc: '신규 블록 추가됨'}],
         originalSnapshot: JSON.parse(JSON.stringify(MOCK_BLOCKS)), 
         snapshot: JSON.parse(JSON.stringify([
             { ...MOCK_BLOCKS[0] },
@@ -127,12 +144,12 @@ const MOCK_REQUESTS = [
         ]))
     },
     { 
-        id: 'r2', requester: '이마케팅', team: '마케팅팀', title: '이벤트 배너 교체', desc: '봄맞이 할인 이벤트 배너', type: 'BIG_BANNER', gnb: '영화', status: 'PENDING', location: '중단', createdAt: '2023-11-02', changes: [{type: '수정', desc: '배너 이미지 교체됨'}],
+        id: 'r2', requester: '이마케팅', team: '마케팅팀', title: '이벤트 배너 교체', desc: '봄맞이 할인 이벤트 배너', type: 'BIG_BANNER', gnb: '영화', menuPath: '영화', status: 'PENDING', location: '중단', createdAt: '2023-11-02', changes: [{type: '수정', desc: '배너 이미지 교체됨'}],
         originalSnapshot: JSON.parse(JSON.stringify(MOCK_BLOCKS)),
         snapshot: JSON.parse(JSON.stringify(MOCK_BLOCKS))
     },
     {
-        id: 'r3', requester: '박운영', team: '운영팀', title: '12월 정기 개편 반영', desc: '12월 개편안 반영 완료', type: 'MIXED', gnb: '홈', status: 'APPROVED', location: '전체', createdAt: '2023-12-01T09:00:00', changes: [{type: '수정', desc: '전체 블록 순서 변경'}],
+        id: 'r3', requester: '박운영', team: '운영팀', title: '12월 정기 개편 반영', desc: '12월 개편안 반영 완료', type: 'MIXED', gnb: '홈', menuPath: '홈', status: 'APPROVED', location: '전체', createdAt: '2023-12-01T09:00:00', changes: [{type: '수정', desc: '전체 블록 순서 변경'}],
         originalSnapshot: JSON.parse(JSON.stringify(MOCK_BLOCKS)),
         snapshot: JSON.parse(JSON.stringify(MOCK_BLOCKS))
     }
@@ -230,9 +247,13 @@ const useBtvData = (supabase, viewMode) => {
 
     const fetchRequests = async () => {
         if (USE_MOCK_DATA) {
-            // Mock Request Logic
-            setRequests(MOCK_REQUESTS.filter(r => r.status === 'PENDING'));
-            setSavedRequests(MOCK_REQUESTS); // Saved requests includes history
+            // Mock Request Logic - Ensure Mock data has menuPath populated if missing
+            const enrichedMock = MOCK_REQUESTS.map(r => ({
+                ...r,
+                menuPath: r.menuPath || r.gnb || '홈'
+            }));
+            setRequests(enrichedMock.filter(r => r.status === 'PENDING'));
+            setSavedRequests(enrichedMock); // Saved requests includes history
             return;
         }
 
@@ -1085,7 +1106,13 @@ export default function App() {
 
   const filteredRequests = requests.filter(req => inboxFilter === 'ALL' || req.gnb === inboxFilter).filter(r => r.status === 'PENDING');
   // History shows APPROVED requests
-  const historyLogs = savedRequests.filter(req => req.status === 'APPROVED' && (unaFilter === 'ALL' || (req.menuPath && req.menuPath.includes(unaFilter))));
+  const filteredSavedRequests = savedRequests.filter(req => {
+      const target = req.menuPath || req.gnb;
+      return unaFilter === 'ALL' || (target && target.includes(unaFilter));
+  });
+
+  const historyLogs = filteredSavedRequests.filter(req => req.status === 'APPROVED');
+  const unaRequests = filteredSavedRequests.filter(req => req.status !== 'APPROVED'); // UNA 탭에서 보여줄 목록 (PENDING, REJECTED)
   
   if (isLoading) {
     return (
@@ -1280,159 +1307,65 @@ export default function App() {
           </div>
         )}
 
-        {/* Modal */}
-        {modalState.isOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-            <div className={`bg-[#191b23] rounded-xl border border-[#2e3038] shadow-2xl overflow-hidden flex flex-col max-h-[85vh] ${modalState.type === 'NEW_REQUEST' || modalState.type === 'ADD_BLOCK' || modalState.type === 'HISTORY_SELECT' ? 'w-[500px]' : 'w-[450px]'}`}>
-              <div className="p-5 border-b border-[#2e3038] flex justify-between items-center bg-[#1e2029] shrink-0">
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  {modalState.type === 'HISTORY_SELECT' ? '히스토리 탐색' : modalState.type === 'NEW_REQUEST' ? '신규 프로모션 요청 등록' : modalState.type === 'ADD_BLOCK' ? '신규 블록 생성' : modalState.type === 'SAVE' ? '편성 요청 정보 입력' : modalState.type === 'APPROVE' ? '편성 반영 확인' : modalState.type === 'EDIT_ID' ? '블록 설정 수정' : modalState.type === 'EDIT_BANNER' ? '배너 수정' : modalState.type === 'EDIT_CONTENT' ? '콘텐츠 수정' : modalState.type === 'EDIT_TAB_NAME' ? '탭 이름 수정' : modalState.type === 'ADD_GNB' ? '최상위 메뉴 추가' : modalState.type === 'ADD_SUBMENU' ? '하위 메뉴 추가' : modalState.type === 'DELETE_BANNER_CONFIRM' ? '삭제 확인' : modalState.type === 'DELETE_REQUEST' ? '요청 삭제 확인' : '확인'}
-                </h3>
-                <button onClick={() => setModalState({ ...modalState, isOpen: false })}><X size={18} className="text-slate-500 hover:text-white"/></button>
-              </div>
-              <div className="p-6 overflow-y-auto">
-                  {/* ... (이전 모달 내용은 동일, DELETE_REQUEST 케이스 추가) */}
-                  {modalState.type === 'DELETE_REQUEST' && (
-                      <div className="text-center p-4">
-                          <Trash2 className="mx-auto text-red-500 mb-2" size={32} />
-                          <p className="text-white font-bold mb-1">요청서를 삭제하시겠습니까?</p>
-                          <p className="text-xs text-slate-400">삭제 후에는 복구할 수 없습니다.</p>
-                      </div>
-                  )}
-                  {modalState.type === 'HISTORY_SELECT' && (
-                      <div className="space-y-4">
-                          <p className="text-sm text-slate-400 mb-2">확인하고 싶은 과거 날짜를 선택해주세요.</p>
-                          <div className="bg-[#100d1d] border border-[#2e3038] rounded-lg p-4">
-                              <div className="flex justify-between items-center mb-4"><button onClick={handlePrevMonth} className="p-1 hover:bg-[#2e3038] rounded text-slate-400 hover:text-white"><ChevronLeft size={16}/></button><span className="text-sm font-bold text-white">{currentCalendarDate.getFullYear()}년 {currentCalendarDate.getMonth() + 1}월</span><button onClick={handleNextMonth} className="p-1 hover:bg-[#2e3038] rounded text-slate-400 hover:text-white"><ChevronRight size={16}/></button></div>
-                              <div className="grid grid-cols-7 gap-1 text-center text-xs text-slate-500 mb-2"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
-                              <div className="grid grid-cols-7 gap-1">{renderCalendar()}</div>
-                          </div>
-                          <div className="flex items-center gap-2 text-xs text-slate-500 mt-2"><div className="w-2 h-2 bg-[#7387ff] rounded-full"></div><span>변경 이력이 있는 날짜</span></div>
-                      </div>
-                  )}
-                  {(modalState.type === 'ADD_GNB' || modalState.type === 'ADD_SUBMENU') && (
-                      <div className="space-y-4">
-                          <div><label className="block text-xs font-bold text-slate-500 mb-1">{modalState.type === 'ADD_GNB' ? 'GNB 메뉴 이름' : '하위 메뉴 이름'}</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={menuNameInput} onChange={e => setMenuNameInput(e.target.value)} placeholder="메뉴 이름 입력" autoFocus disabled={isDivider} onKeyDown={(e) => { if(e.key === 'Enter') handleAddMenu(); }} /></div>
-                          <div className="flex items-center pt-2"><label className="flex items-center gap-2 cursor-pointer text-sm text-slate-300"><input type="checkbox" checked={isDivider} onChange={e => { setIsDivider(e.target.checked); if(e.target.checked) setMenuNameInput('---'); else setMenuNameInput(''); }} className="accent-[#7387ff]" />구분선 추가</label></div>
-                      </div>
-                  )}
-                  {modalState.type === 'NEW_REQUEST' && (
-                    <div className="space-y-4">
-                      <div><label className="block text-xs font-bold text-slate-500 mb-1">GNB 메뉴 (대상)</label><select className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newRequestData.gnb} onChange={e => setNewRequestData({...newRequestData, gnb: e.target.value})}>{gnbList.map(m => (<React.Fragment key={m.id}><option value={m.name}>{m.name}</option></React.Fragment>))}</select></div>
-                      <div className="grid grid-cols-2 gap-4">
-                          <div><label className="block text-xs font-bold text-slate-500 mb-1">요청자</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newRequestData.requester} onChange={e => setNewRequestData({...newRequestData, requester: e.target.value})} placeholder="요청자 이름" /></div>
-                          <div><label className="block text-xs font-bold text-slate-500 mb-1">소속 팀</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newRequestData.team} onChange={e => setNewRequestData({...newRequestData, team: e.target.value})} placeholder="예: 편성1팀" /></div>
-                      </div>
-                      <div><label className="block text-xs font-bold text-slate-500 mb-1">제목</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newRequestData.headline} onChange={e => setNewRequestData({...newRequestData, headline: e.target.value})} placeholder="요청 제목 입력"/></div>
-                      <div><label className="block text-xs font-bold text-slate-500 mb-1">편성 유형</label><select className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newRequestData.type} onChange={e => setNewRequestData({...newRequestData, type: e.target.value})}><optgroup label="콘텐츠 블록"><option value="VERTICAL">세로 포스터</option><option value="HORIZONTAL">가로 포스터</option><option value="HORIZONTAL_MINI">미니 가로</option><option value="TAB">탭 블록</option><option value="MULTI">멀티 블록</option></optgroup><optgroup label="배너"><option value="BIG_BANNER">빅배너</option><option value="BAND_BANNER">띠배너</option><option value="LONG_BANNER">롱배너</option><option value="BANNER_1">1단 배너</option><option value="BANNER_2">2단 배너</option><option value="BANNER_3">3단 배너</option></optgroup></select></div>
-                      <div><label className="block text-xs font-bold text-slate-500 mb-1">편성 요청 위치</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newRequestData.location} onChange={e => setNewRequestData({...newRequestData, location: e.target.value})} placeholder="예: TV 방송 홈 상단"/></div>
-                      <div><label className="block text-xs font-bold text-slate-500 mb-1">상세 내용</label><textarea className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none h-20" value={newRequestData.desc} onChange={e => setNewRequestData({...newRequestData, desc: e.target.value})} placeholder="요청 상세 내용 입력"/></div>
-                      <div><label className="block text-xs font-bold text-slate-500 mb-1">비고</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newRequestData.remarks} onChange={e => setNewRequestData({...newRequestData, remarks: e.target.value})} placeholder="특이사항 입력"/></div>
-                      <div><label className="block text-xs font-bold text-slate-500 mb-1">Jira 티켓 링크</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newRequestData.jiraLink} onChange={e => setNewRequestData({...newRequestData, jiraLink: e.target.value})} placeholder="http://jira..." /></div>
+        {/* REQUEST VIEW (UNA 요청) */}
+        {viewMode === 'REQUEST' && (
+          <div className="flex-1 flex flex-col overflow-hidden bg-[#0a0812]">
+            {viewRequest ? (
+                // DETAIL VIEW
+                <div className="flex flex-col h-full">
+                    <div className="h-14 border-b border-[#2e3038] flex items-center px-6 gap-3 bg-[#191b23] shrink-0">
+                        <button onClick={() => setViewRequest(null)} className="p-1 hover:bg-white/10 rounded-full text-slate-400 hover:text-white"><ChevronLeft size={20} /></button>
+                        <h2 className="text-base font-bold text-white">{viewRequest.title}</h2>
+                        <span className={`text-[10px] px-2 py-0.5 rounded ${viewRequest.status === 'APPROVED' ? 'bg-green-900/50 text-green-400' : 'bg-yellow-900/50 text-yellow-400'}`}>{viewRequest.status}</span>
                     </div>
-                  )}
-                  {modalState.type === 'ADD_BLOCK' && (
-                    <div className="space-y-4">
-                      <div><label className="block text-xs font-bold text-slate-500 mb-1">블록 타이틀</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newBlockData.title} onChange={e => setNewBlockData({...newBlockData, title: e.target.value})} /></div>
-                      <div><label className="block text-xs font-bold text-slate-500 mb-2">블록 종류</label><select className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={blockCategory} onChange={(e) => setBlockCategory(e.target.value)}><option value="CONTENT">콘텐츠 블록</option><option value="BANNER">배너 블록</option><option value="MULTI">멀티 블록</option></select></div>
-                      {/* ... (생략된 블록 추가 폼 필드들) ... */}
-                      {blockCategory === 'CONTENT' && (
-                        <div className="space-y-4 pt-2 border-t border-[#2e3038]">
-                           <div className="grid grid-cols-2 gap-4">
-                             <div><label className="block text-xs font-bold text-slate-500 mb-1">상세 유형</label><select className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newBlockData.type} onChange={e => setNewBlockData({...newBlockData, type: e.target.value})}><option value="VERTICAL">세로 포스터</option><option value="HORIZONTAL">가로 포스터</option><option value="HORIZONTAL_MINI">미니 가로</option><option value="TAB">탭 블록</option></select></div>
-                             <div className="flex items-center pt-6"><label className="flex items-center gap-2 cursor-pointer text-sm text-slate-300"><input type="checkbox" checked={newBlockData.showPreview} onChange={e => setNewBlockData({...newBlockData, showPreview: e.target.checked})} className="accent-[#7387ff]" />프리뷰 영역 노출</label></div>
-                           </div>
-                           <div className="grid grid-cols-3 gap-2">
-                             <div className="col-span-1"><label className="block text-xs font-bold text-slate-500 mb-1">ID 유형</label><select className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none" value={newBlockData.contentIdType} onChange={e => setNewBlockData({...newBlockData, contentIdType: e.target.value})}><option value="LIBRARY">라이브러리</option><option value="RACE">RACE</option></select></div>
-                             <div className="col-span-2"><label className="block text-xs font-bold text-slate-500 mb-1">ID값</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none font-mono" value={newBlockData.contentId} onChange={e => setNewBlockData({...newBlockData, contentId: e.target.value})} placeholder={newBlockData.contentIdType === 'LIBRARY' ? 'NB...' : '...RACE'}/></div>
-                           </div>
-                           <div className="bg-[#100d1d] p-3 rounded border border-[#2e3038] space-y-2">
-                             <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-300"><input type="checkbox" checked={newBlockData.useLeadingBanner} onChange={e => setNewBlockData({...newBlockData, useLeadingBanner: e.target.checked})} className="accent-[#7387ff]" />앞단 배너 추가</label>
-                             {newBlockData.useLeadingBanner && (
-                               <div className="pl-5 space-y-2 border-l-2 border-[#2e3038] ml-1">
-                                   <div><label className="block text-[10px] text-slate-500 mb-1">배너명</label><input type="text" className="w-full bg-[#191b23] border border-[#2e3038] rounded px-2 py-1 text-xs text-white" value={newBlockData.leadingBannerTitle} onChange={e => setNewBlockData({...newBlockData, leadingBannerTitle: e.target.value})} placeholder="배너 이름 입력" /></div>
-                                   <div><label className="block text-[10px] text-slate-500 mb-1">배너 크기</label><select className="w-full bg-[#191b23] border border-[#2e3038] rounded px-2 py-1 text-xs text-white" value={newBlockData.leadingBannerType} onChange={e => setNewBlockData({...newBlockData, leadingBannerType: e.target.value})}><option value="1-COL">1단</option><option value="2-COL">2단</option><option value="3-COL">3단</option></select></div>
-                                   <div className="grid grid-cols-2 gap-2"><div><label className="block text-[10px] text-slate-500 mb-1">랜딩 유형</label><input type="text" className="w-full bg-[#191b23] border border-[#2e3038] rounded px-2 py-1 text-xs text-white" value={newBlockData.leadingBannerLanding} onChange={e => setNewBlockData({...newBlockData, leadingBannerLanding: e.target.value})} placeholder="직접 입력" /></div><div><label className="block text-[10px] text-slate-500 mb-1">랜딩 값</label><input type="text" className="w-full bg-[#191b23] border border-[#2e3038] rounded px-2 py-1 text-xs text-white" value={newBlockData.leadingBannerValue} onChange={e => setNewBlockData({...newBlockData, leadingBannerValue: e.target.value})} /></div></div>
-                               </div>
-                             )}
+                    <div className="flex-1 flex overflow-hidden">
+                        <div className="w-[300px] border-r border-[#2e3038] bg-[#161820] flex flex-col p-5 overflow-y-auto">
+                            <h3 className="text-xs font-bold text-slate-500 mb-4 uppercase tracking-wider flex items-center justify-between">변경 요약 <span className="bg-slate-700 text-white px-1.5 rounded-full text-[10px]">{viewRequest.changes.length}</span></h3>
+                            <div className="space-y-2">{viewRequest.changes.map((diff, idx) => ( <div key={idx} className="flex flex-col p-3 rounded bg-[#100d1d] border border-[#2e3038] gap-1"><div className="flex items-center gap-2"><div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${diff.type === '신규' ? 'bg-green-400' : diff.type === '삭제' ? 'bg-red-400' : 'bg-blue-400'}`}></div><span className="text-xs text-slate-300 font-bold truncate">{diff.block?.title || '알림'}</span><span className={`text-[9px] px-1 rounded ml-auto ${diff.type === '신규' ? 'bg-green-900/50 text-green-400' : diff.type === '삭제' ? 'bg-red-900/50 text-red-400' : 'bg-blue-900/50 text-blue-400'}`}>{diff.type}</span></div><p className="text-[11px] text-slate-500 pl-3.5 leading-tight">{diff.desc}</p></div> ))}</div>
+                            <button onClick={() => reqApprove(viewRequest)} disabled={viewRequest.status === 'APPROVED'} className="mt-4 w-full py-3 bg-[#7387ff] hover:bg-[#5b6dbf] disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg text-sm font-bold transition-colors">{viewRequest.status === 'APPROVED' ? '이미 반영됨' : '반영 완료'}</button>
+                        </div>
+                        <div className="flex-1 p-8 overflow-y-auto bg-[#100d1d]">
+                           <div className="grid grid-cols-2 gap-8 max-w-[1200px] mx-auto">
+                               <div className="relative opacity-60 grayscale-[0.5] pointer-events-none"><div className="sticky top-0 z-10 mb-6 flex justify-center"><span className="bg-orange-500/20 text-orange-400 border border-orange-500/50 px-3 py-1 rounded-full text-xs font-bold">변경 전 (As-Is)</span></div><div className="space-y-4">{viewRequest.originalSnapshot?.map((block, i) => <BlockRenderer key={i} block={block} isDragging={false} isOriginal={true} readOnly={true} />)}</div></div>
+                               <div className="relative"><div className="sticky top-0 z-10 mb-6 flex justify-center"><span className="bg-[#7387ff]/20 text-[#7387ff] border border-[#7387ff]/50 px-3 py-1 rounded-full text-xs font-bold">변경 후 (To-Be)</span></div><div className="space-y-4">{viewRequest.snapshot?.map((block, i) => <BlockRenderer key={i} block={block} isDragging={false} isOriginal={false} readOnly={true} />)}</div></div>
                            </div>
                         </div>
-                      )}
-                      {blockCategory === 'BANNER' && (
-                        <div className="space-y-4 pt-2 border-t border-[#2e3038]">
-                          <div><label className="block text-xs font-bold text-slate-500 mb-1">배너 유형</label><select className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-orange-500 outline-none" value={newBlockData.type} onChange={e => setNewBlockData({...newBlockData, type: e.target.value})}><option value="BANNER_1">1단 배너</option><option value="BANNER_2">2단 배너</option><option value="BANNER_3">3단 배너</option><option value="BAND_BANNER">띠배너</option><option value="BIG_BANNER">빅배너</option><option value="LONG_BANNER">롱배너</option><option value="MENU_BLOCK">메뉴 블록</option></select></div>
-                          <div className="bg-[#100d1d] p-3 rounded border border-[#2e3038] space-y-3">
-                             <div className="text-xs font-bold text-orange-500 mb-1">초기 배너 속성</div>
-                             <div><label className="block text-[10px] text-slate-500 mb-1">배너명</label><input type="text" className="w-full bg-[#191b23] border border-[#2e3038] rounded px-2 py-1 text-xs text-white" value={newBlockData.bannerTitle} onChange={e => setNewBlockData({...newBlockData, bannerTitle: e.target.value})} placeholder="배너 이름 입력" /></div>
-                             <div className="grid grid-cols-2 gap-2"><div><label className="block text-[10px] text-slate-500 mb-1">랜딩 유형</label><input type="text" className="w-full bg-[#191b23] border border-[#2e3038] rounded px-2 py-1 text-xs text-white" value={newBlockData.bannerLanding} onChange={e => setNewBlockData({...newBlockData, bannerLanding: e.target.value})} placeholder="직접 입력" /></div><div><label className="block text-[10px] text-slate-500 mb-1">랜딩 값</label><input type="text" className="w-full bg-[#191b23] border border-[#2e3038] rounded px-2 py-1 text-xs text-white" value={newBlockData.bannerValue} onChange={e => setNewBlockData({...newBlockData, bannerValue: e.target.value})} /></div></div>
-                          </div>
-                        </div>
-                      )}
-                      {blockCategory === 'MULTI' && (
-                        <div className="space-y-4 pt-2 border-t border-[#2e3038]">
-                           <div className="grid grid-cols-3 gap-2"><div className="col-span-1"><label className="block text-xs font-bold text-slate-500 mb-1">ID 유형</label><select className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none" value={newBlockData.contentIdType} onChange={e => setNewBlockData({...newBlockData, contentIdType: e.target.value})}><option value="LIBRARY">라이브러리</option></select></div><div className="col-span-2"><label className="block text-xs font-bold text-slate-500 mb-1">ID값</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none font-mono" value={newBlockData.contentId} onChange={e => setNewBlockData({...newBlockData, contentId: e.target.value})} placeholder="NB..." /></div></div>
-                           <div className="flex items-center pt-2"><label className="flex items-center gap-2 cursor-pointer text-sm text-slate-300"><input type="checkbox" checked={newBlockData.showPreview} onChange={e => setNewBlockData({...newBlockData, showPreview: e.target.checked})} className="accent-[#7387ff]" />프리뷰 영역 노출</label></div>
-                        </div>
-                      )}
-                      <div className="border-t border-[#2e3038] pt-4 space-y-4">
-                         <div className="flex items-center justify-between"><label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-300"><input type="checkbox" checked={newBlockData.isTarget} onChange={e => setNewBlockData({...newBlockData, isTarget: e.target.checked})} className="accent-pink-500" /> 타겟 설정</label></div>
-                         {newBlockData.isTarget && <div><label className="block text-xs font-bold text-slate-500 mb-1">Filter Seg 값</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-pink-500 outline-none" value={newBlockData.targetSeg} onChange={e => setNewBlockData({...newBlockData, targetSeg: e.target.value})} placeholder="예: Promotion_1234" /></div>}
-                         <div><label className="block text-xs font-bold text-slate-500 mb-1">비고</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newBlockData.remarks} onChange={e => setNewBlockData({...newBlockData, remarks: e.target.value})} placeholder="추가 요청사항 입력" /></div>
-                      </div>
                     </div>
-                  )}
-                  {modalState.type === 'EDIT_ID' && (
-                   <div className="space-y-4">
-                      <div><label className="block text-xs font-bold text-slate-500 mb-1">블록명</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-[#7387ff]" value={editIdData.title} onChange={e => setEditIdData({...editIdData, title: e.target.value})} /></div>
-                      <div><label className="block text-xs font-bold text-slate-500 mb-1">ID 유형</label><select className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-[#7387ff]" value={editIdData.idType} onChange={e => setEditIdData({...editIdData, idType: e.target.value})}><option value="LIBRARY">라이브러리</option><option value="RACE">RACE</option></select></div>
-                      <div><label className="block text-xs font-bold text-slate-500 mb-1">ID 값</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white font-mono outline-none focus:border-[#7387ff]" value={editIdData.idValue} onChange={e => setEditIdData({...editIdData, idValue: e.target.value})} autoFocus/></div>
-                      <div className="flex items-center pt-2"><label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-300"><input type="checkbox" checked={editIdData.showTitle} onChange={e => setEditIdData({...editIdData, showTitle: e.target.checked})} className="accent-[#7387ff]" /> 블록명 노출</label></div>
-                      <div className="border-t border-[#2e3038] pt-3">
-                        <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-300 mb-2"><input type="checkbox" checked={editIdData.isTarget} onChange={e => setEditIdData({...editIdData, isTarget: e.target.checked})} className="accent-pink-500" /> 타겟 설정</label>
-                        {editIdData.isTarget && <div><label className="block text-xs font-bold text-slate-500 mb-1">Filter Seg 값</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-pink-500 outline-none" value={editIdData.targetSeg} onChange={e => setEditIdData({...editIdData, targetSeg: e.target.value})} placeholder="예: Promotion_1234" /></div>}
+                </div>
+            ) : (
+                // LIST VIEW
+                <div className="flex-1 p-10 overflow-y-auto">
+                   <div className="flex justify-between items-center mb-6">
+                      <h2 className="text-xl font-bold text-white flex items-center gap-2"><FileText size={24} className="text-[#7387ff]" /> UNA 요청 목록</h2>
+                      <div className="flex items-center gap-2">
+                        <Filter size={14} className="text-slate-500"/>
+                        <select className="bg-[#191b23] border border-[#2e3038] rounded px-3 py-1.5 text-xs text-slate-300 outline-none" value={unaFilter} onChange={(e) => setUnaFilter(e.target.value)}>
+                            <option value="ALL">전체 메뉴</option>
+                            {gnbList.map(m => (
+                                <React.Fragment key={m.id}>
+                                <option value={m.name}>{m.name}</option>
+                                {/* {m.children?.map(c => <option key={c.id} value={c.name}>- {c.name}</option>)} */}
+                                </React.Fragment>
+                            ))}
+                        </select>
                       </div>
-                      <div><label className="block text-xs font-bold text-slate-500 mb-1">비고</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-[#7387ff]" value={editIdData.remarks} onChange={e => setEditIdData({...editIdData, remarks: e.target.value})} /></div>
                    </div>
-                  )}
-                  {modalState.type === 'EDIT_TAB_NAME' && (
-                    <div className="space-y-4">
-                        <div><label className="block text-xs font-bold text-slate-500 mb-1">탭 이름</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={editTabNameData.name} onChange={e => setEditTabNameData({...editTabNameData, name: e.target.value})} autoFocus/></div>
-                        <div className="flex justify-end pt-2"><button onClick={saveTabName} className="px-4 py-2 bg-[#7387ff] hover:bg-[#5b6dbf] rounded text-white text-xs font-bold">저장</button></div>
-                    </div>
-                  )}
-                  {modalState.type === 'EDIT_BANNER' && (
-                    <div className="space-y-4">
-                      {editBannerData.blockId && blocks.find(b => b.id === editBannerData.blockId)?.type === 'BIG_BANNER' && (
-                        <><div><label className="block text-xs font-bold text-slate-500 mb-1">타이틀</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500" value={editBannerData.title} onChange={e => setEditBannerData({...editBannerData, title: e.target.value})} /></div><div><label className="block text-xs font-bold text-slate-500 mb-1">설명</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500" value={editBannerData.desc} onChange={e => setEditBannerData({...editBannerData, desc: e.target.value})} /></div></>
-                      )}
-                      <div><label className="block text-xs font-bold text-slate-500 mb-1">배너명</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500" value={editBannerData.title} onChange={e => setEditBannerData({...editBannerData, title: e.target.value})} /></div>
-                      <div className="flex gap-2 items-end"><div className="flex-1"><label className="block text-xs font-bold text-slate-500 mb-1">이미지 URL</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500" value={editBannerData.img} onChange={e => setEditBannerData({...editBannerData, img: e.target.value})} /></div><label className="cursor-pointer p-2 bg-[#2e3038] hover:bg-[#3e404b] rounded mb-0.5 border border-slate-600"><Upload size={16} className="text-slate-400"/><input type="file" className="hidden" accept="image/*" onChange={(e) => { const file = e.target.files[0]; if(file) setEditBannerData({...editBannerData, img: URL.createObjectURL(file)}); }} /></label></div>
-                      <div><label className="block text-xs font-bold text-slate-500 mb-1">이벤트 ID</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500" value={editBannerData.eventId} onChange={e => setEditBannerData({...editBannerData, eventId: e.target.value})} /></div>
-                      <div className="grid grid-cols-2 gap-4"><div><label className="block text-xs font-bold text-slate-500 mb-1">랜딩 유형</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500" value={editBannerData.landingType} onChange={e => setEditBannerData({...editBannerData, landingType: e.target.value})} /></div><div><label className="block text-xs font-bold text-slate-500 mb-1">랜딩 값</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white font-mono outline-none focus:border-orange-500" value={editBannerData.landingValue} onChange={e => setEditBannerData({...editBannerData, landingValue: e.target.value})} /></div></div>
-                      <div><label className="block text-xs font-bold text-slate-500 mb-1">Jira 링크</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500" value={editBannerData.jiraLink} onChange={e => setEditBannerData({...editBannerData, jiraLink: e.target.value})} /></div>
-                      <div className="border-t border-[#2e3038] pt-3"><label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-300 mb-2"><input type="checkbox" checked={editBannerData.isTarget} onChange={e => setEditBannerData({...editBannerData, isTarget: e.target.checked})} className="accent-pink-500" /> 타겟 설정</label>{editBannerData.isTarget && <div><label className="block text-xs font-bold text-slate-500 mb-1">Filter Seg 값</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-pink-500 outline-none" value={editBannerData.targetSeg} onChange={e => setEditBannerData({...editBannerData, targetSeg: e.target.value})} /></div>}</div>
-                      <div><label className="block text-xs font-bold text-slate-500 mb-1">비고</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500" value={editBannerData.remarks} onChange={e => setEditBannerData({...editBannerData, remarks: e.target.value})} /></div>
-                    </div>
-                  )}
-                  {modalState.type === 'EDIT_CONTENT' && (
-                    <div className="space-y-4">
-                        <div><label className="block text-xs font-bold text-slate-500 mb-1">콘텐츠명</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-slate-500" value={editContentData.title} onChange={e => setEditContentData({...editContentData, title: e.target.value})} /></div>
-                        <div><label className="block text-xs font-bold text-slate-500 mb-1">시리즈 ID</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-slate-500 font-mono" value={editContentData.seriesId} onChange={e => setEditContentData({...editContentData, seriesId: e.target.value})} /></div>
-                        <div className="flex gap-2 items-end"><div className="flex-1"><label className="block text-xs font-bold text-slate-500 mb-1">이미지 URL</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-slate-500" value={editContentData.img} onChange={e => setEditContentData({...editContentData, img: e.target.value})} /></div><label className="cursor-pointer p-2 bg-[#2e3038] hover:bg-[#3e404b] rounded mb-0.5 border border-slate-600"><Upload size={16} className="text-slate-400"/><input type="file" className="hidden" accept="image/*" onChange={(e) => { const file = e.target.files[0]; if(file) setEditContentData({...editContentData, img: URL.createObjectURL(file)}); }} /></label></div>
-                        <div className="flex justify-end pt-2"><button onClick={saveEditedContent} className="px-4 py-2 bg-[#7387ff] hover:bg-[#5b6dbf] rounded text-white text-xs font-bold">저장</button></div>
-                    </div>
-                  )}
-                  {modalState.type === 'DELETE_BANNER_CONFIRM' && (<div className="text-center p-4"><AlertTriangle className="mx-auto text-red-500 mb-2" size={32} /><p className="text-white font-bold mb-1">배너를 삭제하시겠습니까?</p><p className="text-xs text-slate-400">삭제 후에는 복구할 수 없습니다.</p></div>)}
-                  {modalState.type === 'SAVE' && (<div className="space-y-4"><div><label className="block text-xs font-bold text-slate-500 mb-1">요청 제목</label><input type="text" value={requestTitle} onChange={e => setRequestTitle(e.target.value)} className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white"/></div>{diffSummary.length > 0 && <div className="bg-[#100d1d] p-2 rounded max-h-32 overflow-y-auto">{diffSummary.map((d,i)=><div key={i} className="text-xs text-slate-400">• {d.desc}</div>)}</div>}</div>)}
-                  {['APPROVE', 'DELETE_BLOCK', 'DELETE_REQUEST', 'RESET'].includes(modalState.type) && <p className="text-slate-300 text-sm">작업을 계속 진행하시겠습니까?</p>}
-              </div>
-              <div className="p-4 bg-[#161820] flex justify-end gap-2 border-t border-[#2e3038] shrink-0">
-                {modalState.type === 'EDIT_BANNER' && <button onClick={confirmDeleteBanner} className="mr-auto px-4 py-2 rounded text-red-400 text-xs font-bold hover:bg-red-900/20 border border-red-900/50">삭제</button>}
-                {modalState.type !== 'EDIT_TAB_NAME' && modalState.type !== 'EDIT_CONTENT' && modalState.type !== 'ADD_GNB' && modalState.type !== 'ADD_SUBMENU' && modalState.type !== 'HISTORY_SELECT' && <button onClick={() => setModalState({ ...modalState, isOpen: false })} className="px-4 py-2 rounded text-slate-400 text-xs font-bold hover:bg-[#2e3038]">취소</button>}
-                {modalState.type !== 'EDIT_TAB_NAME' && modalState.type !== 'EDIT_CONTENT' && modalState.type !== 'HISTORY_SELECT' && <button onClick={modalState.type === 'NEW_REQUEST' ? handleCreateRequest : modalState.type === 'ADD_BLOCK' ? confirmAddBlock : modalState.type === 'EDIT_ID' ? saveEditedId : modalState.type === 'EDIT_BANNER' ? saveEditedBanner : modalState.type === 'ADD_GNB' || modalState.type === 'ADD_SUBMENU' ? handleAddMenu : handleConfirmAction} className={`px-6 py-2 rounded text-white text-xs font-bold shadow-lg ${modalState.type === 'DELETE_BANNER_CONFIRM' ? 'bg-red-600 hover:bg-red-500' : modalState.type === 'EDIT_BANNER' || (modalState.type === 'ADD_BLOCK' && blockCategory === 'BANNER') ? 'bg-orange-600 hover:bg-orange-500' : 'bg-[#7387ff] hover:bg-[#5b6dbf]'}`}>{modalState.type === 'DELETE_BANNER_CONFIRM' ? '삭제 확인' : '확인'}</button>}
-                {modalState.type === 'HISTORY_SELECT' && <button onClick={() => setModalState({ ...modalState, isOpen: false })} className="px-4 py-2 rounded text-slate-400 text-xs font-bold hover:bg-[#2e3038]">닫기</button>}
-              </div>
-            </div>
+                   {unaRequests.length === 0 ? (<div className="text-center text-slate-500 mt-20">대기 중인 요청서가 없습니다.</div>) : (
+                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {unaRequests.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map(req => (
+                              <div key={req.id} onClick={() => setViewRequest(req)} className="bg-[#191b23] border border-[#2e3038] hover:border-[#7387ff] rounded-xl p-5 cursor-pointer transition-all hover:shadow-lg group relative">
+                                  <button onClick={(e) => reqDeleteRequest(req.id, e)} className="absolute top-4 right-4 text-slate-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity z-10 p-1 hover:bg-[#2e3038] rounded" title="요청서 삭제"><Trash2 size={16} /></button>
+                                  <div className="flex justify-between items-start mb-4"><span className={`text-[10px] px-2 py-1 rounded font-bold ${req.status === 'REJECTED' ? 'bg-red-900/30 text-red-400' : 'bg-yellow-900/30 text-yellow-400'}`}>{req.status}</span><span className="text-slate-500 text-xs">{req.createdAt}</span></div>
+                                  <h3 className="text-lg font-bold text-white mb-2 group-hover:text-[#7387ff] transition-colors">{req.title}</h3>
+                                  <div className="space-y-1 text-sm text-slate-400 mb-4"><div className="flex items-center gap-2"><CalendarIcon size={14}/> {req.date} 반영</div><div className="flex items-center gap-2"><User size={14}/> {req.requester} {req.team && `(${req.team})`}</div></div>
+                                  <div className="pt-4 border-t border-[#2e3038] flex justify-between items-center text-xs text-slate-500"><span>변경사항 {req.changes.length}건</span><span className="flex items-center gap-1 group-hover:text-white transition-colors">상세보기 <ArrowRight size={12}/></span></div>
+                                  {req.menuPath && <div className="mt-2 text-[9px] text-slate-600 bg-slate-800 px-2 py-0.5 rounded w-fit">{req.menuPath}</div>}
+                              </div>
+                          ))}
+                       </div>
+                   )}
+                </div>
+            )}
           </div>
         )}
       </main>
