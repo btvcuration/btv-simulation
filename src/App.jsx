@@ -6,7 +6,7 @@ import {
   Inbox, User, ExternalLink, RotateCcw, Calendar as CalendarIcon, Clock, ChevronLeft, Tv, Film, PlayCircle, BookOpen, MessageSquare, Ban,
   Eye, EyeOff, Database, Layers, Hash, Edit3, AlertTriangle, Link, MousePointer, Image as ImageIcon,
   MousePointerClick, Image, Tag, PlusCircle, MoreHorizontal, GripHorizontal, Target, StickyNote, Settings, Upload, Link2, Box, Filter,
-  Menu, History, Rewind, MoreVertical, Minus, Users, FileClock, CheckSquare
+  Menu, History, Rewind, MoreVertical, Minus, Users, Check, XCircle
 } from 'lucide-react';
 
 // ==========================================
@@ -135,7 +135,7 @@ const MOCK_HISTORY_DATA = {
 
 const MOCK_REQUESTS = [
     { 
-        id: 'r1', requester: '김편성', team: '편성1팀', title: '신규 영화 블록 추가 요청', desc: '이번 주 신작 영화 소개를 위한 블록 추가', type: 'VERTICAL', gnb: '홈', menuPath: '홈', status: 'PENDING', location: '상단', remarks: '급함', createdAt: '2023-11-01', changes: [{type: '신규', desc: '신규 블록 추가됨'}],
+        id: 'r1', requester: '김편성', team: '편성1팀', title: '신규 영화 블록 추가 요청', desc: '이번 주 신작 영화 소개를 위한 블록 추가', type: 'VERTICAL', gnb: '홈', status: 'PENDING', location: '상단', remarks: '급함', createdAt: '2023-11-01', changes: [{type: '신규', desc: '신규 블록 추가됨'}],
         originalSnapshot: JSON.parse(JSON.stringify(MOCK_BLOCKS)), 
         snapshot: JSON.parse(JSON.stringify([
             { ...MOCK_BLOCKS[0] },
@@ -144,12 +144,7 @@ const MOCK_REQUESTS = [
         ]))
     },
     { 
-        id: 'r2', requester: '이마케팅', team: '마케팅팀', title: '이벤트 배너 교체', desc: '봄맞이 할인 이벤트 배너', type: 'BIG_BANNER', gnb: '영화', menuPath: '영화', status: 'PENDING', location: '중단', createdAt: '2023-11-02', changes: [{type: '수정', desc: '배너 이미지 교체됨'}],
-        originalSnapshot: JSON.parse(JSON.stringify(MOCK_BLOCKS)),
-        snapshot: JSON.parse(JSON.stringify(MOCK_BLOCKS))
-    },
-    {
-        id: 'r3', requester: '박운영', team: '운영팀', title: '12월 정기 개편 반영', desc: '12월 개편안 반영 완료', type: 'MIXED', gnb: '홈', menuPath: '홈', status: 'APPROVED', location: '전체', createdAt: '2023-12-01T09:00:00', changes: [{type: '수정', desc: '전체 블록 순서 변경'}],
+        id: 'r2', requester: '이마케팅', team: '마케팅팀', title: '이벤트 배너 교체', desc: '봄맞이 할인 이벤트 배너', type: 'BIG_BANNER', gnb: '영화', status: 'PENDING', location: '중단', createdAt: '2023-11-02', changes: [{type: '수정', desc: '배너 이미지 교체됨'}],
         originalSnapshot: JSON.parse(JSON.stringify(MOCK_BLOCKS)),
         snapshot: JSON.parse(JSON.stringify(MOCK_BLOCKS))
     }
@@ -157,6 +152,7 @@ const MOCK_REQUESTS = [
 
 // Helper to generate slug
 const generateSlug = (name) => {
+    // 한글이 포함된 경우 랜덤 문자열 조합, 영문인 경우 소문자 변환
     const isKorean = /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(name);
     if (isKorean || name === '---') {
         return `menu-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -175,7 +171,6 @@ const useBtvData = (supabase, viewMode) => {
     const [requests, setRequests] = useState([...MOCK_REQUESTS]);
     const [savedRequests, setSavedRequests] = useState([...MOCK_REQUESTS]);
     const [isLoading, setIsLoading] = useState(false);
-    const [refreshKey, setRefreshKey] = useState(0); // Force refresh trigger
 
     const fetchGnb = async () => {
       if (USE_MOCK_DATA) {
@@ -206,75 +201,15 @@ const useBtvData = (supabase, viewMode) => {
             }
         });
         setGnbList(tree);
-        // If currentMenuId is not set or invalid, set to first item
-        if (!currentMenuId || !data.find(d => d.id === currentMenuId)) {
-            const home = tree.find(m => m.name === '홈') || tree[0];
-            if(home) { setCurrentMenuId(home.id); setCurrentMenuPath(home.name); }
+        if (currentMenuId) {
+            const current = data.find(d => d.id === currentMenuId);
+            if (current) setCurrentMenuPath(current.name);
+            else {
+                const home = tree.find(m => m.name === '홈') || tree[0];
+                if(home) { setCurrentMenuId(home.id); setCurrentMenuPath(home.name); }
+            }
         }
       }
-    };
-
-    const fetchBlocks = async () => {
-        if (!currentMenuId) return;
-        
-        setIsLoading(true);
-        if (USE_MOCK_DATA) {
-           // Mock data logic (no change needed for now)
-           setIsLoading(false);
-           return;
-        }
-
-        if (!supabase || !supabase.from) return;
-
-        const { data, error } = await supabase
-          .from('blocks')
-          .select('*')
-          .eq('gnb_id', currentMenuId)
-          .order('sort_order', { ascending: true });
-
-        if (data) {
-          const formattedBlocks = data.map(b => ({
-            id: b.id, type: b.type, title: b.title, blockId: b.block_id_code, showTitle: b.show_title, isNew: false, ...b.content
-          }));
-          setBlocks(formattedBlocks);
-          setOriginalBlocks(JSON.parse(JSON.stringify(formattedBlocks)));
-        } else {
-          setBlocks([]);
-          setOriginalBlocks([]);
-        }
-        setIsLoading(false);
-    };
-
-    const fetchRequests = async () => {
-        if (USE_MOCK_DATA) {
-            // Mock Request Logic - Ensure Mock data has menuPath populated if missing
-            const enrichedMock = MOCK_REQUESTS.map(r => ({
-                ...r,
-                menuPath: r.menuPath || r.gnb || '홈'
-            }));
-            setRequests(enrichedMock.filter(r => r.status === 'PENDING'));
-            setSavedRequests(enrichedMock); // Saved requests includes history
-            return;
-        }
-
-        if (!supabase || !supabase.from) return;
-
-        const { data } = await supabase
-            .from('requests')
-            .select('*')
-            .order('created_at', { ascending: false });
-        
-        if (data) {
-            const formattedRequests = data.map(r => ({
-                id: r.id, title: r.title, requester: r.requester, team: r.team, gnb: r.gnb_target, type: 'VERTICAL', 
-                desc: r.description, location: r.location, status: r.status, 
-                date: new Date(r.created_at).toLocaleDateString(),
-                createdAt: new Date(r.created_at).toLocaleString(),
-                changes: [], snapshot: r.snapshot_new, originalSnapshot: r.snapshot_original, menuPath: r.gnb_target 
-            }));
-            setRequests(formattedRequests.filter(r => r.status === 'PENDING'));
-            setSavedRequests(formattedRequests);
-        }
     };
 
     useEffect(() => {
@@ -282,12 +217,71 @@ const useBtvData = (supabase, viewMode) => {
     }, [supabase]);
 
     useEffect(() => {
+        if (!currentMenuId) return;
+
+        const fetchBlocks = async () => {
+          if (USE_MOCK_DATA) {
+             if (blocks.length === 0 || currentMenuId === '1') {
+                 setBlocks(JSON.parse(JSON.stringify(MOCK_BLOCKS)));
+                 setOriginalBlocks(JSON.parse(JSON.stringify(MOCK_BLOCKS)));
+             }
+             return;
+          }
+
+          if (!supabase || !supabase.from) return;
+
+          const { data, error } = await supabase
+            .from('blocks')
+            .select('*')
+            .eq('gnb_id', currentMenuId)
+            .order('sort_order', { ascending: true });
+
+          if (data) {
+            const formattedBlocks = data.map(b => ({
+              id: b.id, type: b.type, title: b.title, blockId: b.block_id_code, showTitle: b.show_title, isNew: false, ...b.content
+            }));
+            setBlocks(formattedBlocks);
+            setOriginalBlocks(JSON.parse(JSON.stringify(formattedBlocks)));
+          } else {
+            setBlocks([]);
+            setOriginalBlocks([]);
+          }
+        };
         fetchBlocks();
-    }, [currentMenuId, supabase, refreshKey]);
+    }, [currentMenuId, supabase]);
 
     useEffect(() => {
+        const fetchRequests = async () => {
+            if (USE_MOCK_DATA) {
+                setRequests(MOCK_REQUESTS.filter(r => r.status === 'PENDING'));
+                setSavedRequests(MOCK_REQUESTS);
+                return;
+            }
+
+            if (!supabase || !supabase.from) return;
+
+            const { data } = await supabase
+                .from('requests')
+                .select('*')
+                .order('created_at', { ascending: false });
+            
+            if (data) {
+                const formattedRequests = data.map(r => ({
+                    id: r.id, title: r.title, requester: r.requester, team: r.team, gnb: r.gnb_target, type: 'VERTICAL', 
+                    desc: r.description, location: r.location, status: r.status, 
+                    date: new Date(r.created_at).toLocaleDateString(),
+                    createdAt: new Date(r.created_at).toLocaleString(),
+                    // [수정] DB 컬럼 매핑 추가 (remarks, jira_link)
+                    remarks: r.remarks, 
+                    jiraLink: r.jira_link,
+                    changes: [], snapshot: r.snapshot_new, originalSnapshot: r.snapshot_original, menuPath: r.gnb_target 
+                }));
+                setRequests(formattedRequests.filter(r => r.status === 'PENDING'));
+                setSavedRequests(formattedRequests);
+            }
+        };
         fetchRequests(); 
-    }, [viewMode, supabase, refreshKey]);
+    }, [viewMode, supabase]);
 
     const toggleExpand = (id) => {
         if (expandedMenuIds.includes(id)) {
@@ -302,14 +296,16 @@ const useBtvData = (supabase, viewMode) => {
             toggleExpand(id);
             return;
         }
-        setCurrentMenuId(id);
-        setCurrentMenuPath(path);
-        
         if (USE_MOCK_DATA) {
+            setCurrentMenuId(id);
+            setCurrentMenuPath(path);
             const shuffled = [...MOCK_BLOCKS].sort(() => 0.5 - Math.random());
             const newBlocks = id === '1' ? [...MOCK_BLOCKS] : shuffled;
             setBlocks(JSON.parse(JSON.stringify(newBlocks)));
             setOriginalBlocks(JSON.parse(JSON.stringify(newBlocks)));
+        } else {
+            setCurrentMenuId(id);
+            setCurrentMenuPath(path);
         }
     };
 
@@ -368,12 +364,8 @@ const useBtvData = (supabase, viewMode) => {
                 setGnbList(newList);
             }
         } else {
-            // Real DB Reorder Logic
-            // For simplicity in this immersive, we assume single update call or simple swap
-            // In production, this needs to update 'sort_order' for affected items
-            console.log(`Reorder ${type}: ${dragId} to ${dropId}`);
-            alert("상용 DB 모드: 순서 변경이 요청되었습니다. (실제 DB 업데이트 로직 필요)");
-            // After DB update, fetchGnb();
+            // DB Reorder Logic placeholder
+            alert("상용 DB 모드에서는 순서 변경이 즉시 저장되지 않을 수 있습니다 (데모).");
         }
     }
 
@@ -404,10 +396,6 @@ const useBtvData = (supabase, viewMode) => {
           }
     };
 
-    const refreshData = () => {
-        setRefreshKey(prev => prev + 1);
-    }
-
     return {
         gnbList, setGnbList, 
         currentMenuPath, setCurrentMenuPath, 
@@ -418,7 +406,7 @@ const useBtvData = (supabase, viewMode) => {
         requests, setRequests, savedRequests, setSavedRequests,
         isLoading, setIsLoading,
         handleMenuChange, toggleExpand,
-        addGnb, addSubMenu, deleteGnb, deleteSubMenu, reorderMenu, refreshData
+        addGnb, addSubMenu, deleteGnb, deleteSubMenu, reorderMenu
     };
 };
 
@@ -887,9 +875,10 @@ export default function App() {
     }
   }, []);
 
-  const { gnbList, setGnbList, currentMenuPath, currentMenuId, expandedMenuIds, toggleExpand, addGnb, deleteGnb, addSubMenu, deleteSubMenu, reorderMenu, blocks, setBlocks, originalBlocks, setOriginalBlocks, requests, setRequests, savedRequests, setSavedRequests, isLoading, handleMenuChange, refreshData } = useBtvData(supabase, viewMode);
+  const { gnbList, setGnbList, currentMenuPath, currentMenuId, expandedMenuIds, toggleExpand, addGnb, deleteGnb, addSubMenu, deleteSubMenu, reorderMenu, blocks, setBlocks, originalBlocks, setOriginalBlocks, requests, setRequests, savedRequests, setSavedRequests, isLoading, handleMenuChange } = useBtvData(supabase, viewMode);
   
   const [viewRequest, setViewRequest] = useState(null);
+  const [historyDate, setHistoryDate] = useState('');
   const [inboxFilter, setInboxFilter] = useState('ALL');
   const [unaFilter, setUnaFilter] = useState('ALL');
   const [modalState, setModalState] = useState({ isOpen: false, type: null, data: null });
@@ -905,7 +894,7 @@ export default function App() {
   const [newRequestData, setNewRequestData] = useState({ requester: '', team: '', headline: '', location: '', desc: '', remarks: '', type: 'VERTICAL', jiraLink: '', gnb: '홈' }); 
   const [menuNameInput, setMenuNameInput] = useState('');
   const [isDivider, setIsDivider] = useState(false);
-  const [historyRequest, setHistoryRequest] = useState(null); // Selected history request
+  const [currentCalendarDate, setCurrentCalendarDate] = useState(new Date('2023-10-01'));
 
   const dragItem = useRef(null);
   const dragOverItem = useRef(null);
@@ -958,6 +947,7 @@ export default function App() {
   const handleReset = () => { setBlocks(JSON.parse(JSON.stringify(originalBlocks))); }; 
   const reqDeleteRequest = (id, e) => { e.stopPropagation(); setModalState({ isOpen: true, type: 'DELETE_REQUEST', data: id }); };
   const reqApprove = (req) => setModalState({ isOpen: true, type: 'APPROVE', data: req });
+  const handleRejectRequest = async (id, e) => { e.stopPropagation(); if(window.confirm('거절하시겠습니까?')) { await supabase.from('requests').update({status: 'REJECTED'}).eq('id', id); setRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'REJECTED' } : r)); } };
   
   const openEditIdModal = (block, tabIndex) => { let cType, cVal, cTarget, cSeg, cRemark; if (block.type === 'TAB' && tabIndex !== null && block.tabs[tabIndex]) { cType = block.tabs[tabIndex].contentIdType; cVal = block.tabs[tabIndex].contentId; } else { cType = block.contentIdType; cVal = block.contentId; cTarget = block.isTarget; cSeg = block.targetSeg; cRemark = block.remarks; } setEditIdData({ blockId: block.id, tabIndex, idType: cType, idValue: cVal, isTarget: cTarget || false, targetSeg: cSeg || '', remarks: cRemark || '', title: block.title || '', showTitle: block.showTitle !== false }); setModalState({ isOpen: true, type: 'EDIT_ID', data: null }); };
   const saveEditedId = () => { const { blockId, tabIndex, idType, idValue, isTarget, targetSeg, remarks, title, showTitle } = editIdData; const block = blocks.find(b => b.id === blockId); if (!block) return; let updates = { title, showTitle }; if (block.type === 'TAB' && tabIndex !== null) { const newTabs = [...block.tabs]; newTabs[tabIndex] = { ...newTabs[tabIndex], contentIdType: idType, contentId: idValue }; updates.tabs = newTabs; } else { updates = { ...updates, contentIdType: idType, contentId: idValue, isTarget, targetSeg, remarks }; } handleUpdateBlock(blockId, updates); setModalState({ ...modalState, isOpen: false }); };
@@ -972,7 +962,41 @@ export default function App() {
   const saveTabName = () => { const { blockId, tabIndex, name } = editTabNameData; setBlocks(prev => prev.map(b => { if (b.id !== blockId) return b; const newTabs = [...b.tabs]; newTabs[tabIndex] = { ...newTabs[tabIndex], name }; return { ...b, tabs: newTabs }; })); setModalState({ ...modalState, isOpen: false }); };
   const handleOpenSaveModal = () => { const today = new Date(); today.setDate(today.getDate() + 3); setScheduleDate(today.toISOString().split('T')[0]); setRequestTitle(`[편성요청] ${currentMenuPath} 정기 개편`); const diffs = generateDiffs(); setDiffSummary(diffs.length > 0 ? diffs : [{ type: '알림', block: { title: '-' }, desc: '변경 사항이 없습니다.' }]); setModalState({ isOpen: true, type: 'SAVE', data: null }); };
   
-  const handleCreateRequest = async () => { if (!newRequestData.headline || !newRequestData.requester) return alert('요청자 및 제목을 입력해주세요.'); if (USE_MOCK_DATA) { alert('(Mock) 요청이 등록되었습니다. (실제 DB 저장 X)'); const mockNewReq = { id: `req-${Date.now()}`, requester: newRequestData.requester, team: newRequestData.team, title: newRequestData.headline, gnb: newRequestData.gnb, desc: newRequestData.desc, location: newRequestData.location, status: 'PENDING', type: newRequestData.type, remarks: newRequestData.remarks }; setRequests(prev => [mockNewReq, ...prev]); setModalState({ ...modalState, isOpen: false }); return; } if (!supabase) return; const { error } = await supabase.from('requests').insert({ requester: newRequestData.requester, team: newRequestData.team, title: newRequestData.headline, gnb_target: newRequestData.gnb, description: newRequestData.desc, location: newRequestData.location, status: 'PENDING' }); if(!error) { alert('요청이 등록되었습니다.'); window.location.reload(); } else { alert('요청 등록 실패'); } setModalState({ ...modalState, isOpen: false }); };
+  const handleCreateRequest = async () => { 
+      if (!newRequestData.headline || !newRequestData.requester) return alert('요청자 및 제목을 입력해주세요.'); 
+      
+      if (USE_MOCK_DATA) { 
+          alert('(Mock) 요청이 등록되었습니다. (실제 DB 저장 X)'); 
+          const mockNewReq = { id: `req-${Date.now()}`, requester: newRequestData.requester, team: newRequestData.team, title: newRequestData.headline, gnb: newRequestData.gnb, desc: newRequestData.desc, location: newRequestData.location, status: 'PENDING', type: newRequestData.type, remarks: newRequestData.remarks, jiraLink: newRequestData.jiraLink }; 
+          setRequests(prev => [mockNewReq, ...prev]); 
+          setModalState({ ...modalState, isOpen: false }); 
+          return; 
+      } 
+      
+      if (!supabase) return; 
+      
+      // [수정] 실제 DB Insert 시 remarks, jira_link 포함
+      const { error } = await supabase.from('requests').insert({ 
+          requester: newRequestData.requester, 
+          team: newRequestData.team, 
+          title: newRequestData.headline, 
+          gnb_target: newRequestData.gnb, 
+          description: newRequestData.desc, 
+          location: newRequestData.location, 
+          remarks: newRequestData.remarks,     // 추가
+          jira_link: newRequestData.jiraLink,  // 추가
+          status: 'PENDING' 
+      }); 
+      
+      if(!error) { 
+          alert('요청이 등록되었습니다.'); 
+          window.location.reload(); 
+      } else { 
+          console.error(error);
+          alert('요청 등록 실패'); 
+      } 
+      setModalState({ ...modalState, isOpen: false }); 
+  };
   const handleAddMenu = () => { 
       const { parentId } = modalState.data || {}; 
       const nameToAdd = isDivider ? '---' : menuNameInput;
@@ -984,92 +1008,111 @@ export default function App() {
   const confirmDeleteGnb = (id) => { if (window.confirm('정말 삭제하시겠습니까? 하위 메뉴도 모두 삭제됩니다.')) { deleteGnb(id); } };
   const confirmDeleteSubMenu = (parentId, childId) => { if (window.confirm('정말 삭제하시겠습니까?')) { deleteSubMenu(parentId, childId); } };
 
+  // --- [Calendar Logic for History] ---
+  const getDaysInMonth = (date) => new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  const getFirstDayOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+
+  const handlePrevMonth = () => setCurrentCalendarDate(new Date(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth() - 1, 1));
+  const handleNextMonth = () => setCurrentCalendarDate(new Date(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth() + 1, 1));
+
+  const findClosestHistoryDate = (targetDate) => {
+      const historyDates = Object.keys(MOCK_HISTORY_DATA).sort();
+      let closest = null;
+      for (const hDate of historyDates) { if (hDate <= targetDate) closest = hDate; else break; }
+      return closest;
+  };
+
+  const handleHistorySelect = async (selectedDateStr) => {
+      setModalState({ ...modalState, isOpen: false });
+      if (USE_MOCK_DATA) {
+          const validHistoryDate = findClosestHistoryDate(selectedDateStr);
+          if (!validHistoryDate) { alert(`${selectedDateStr} 이전의 이력 데이터가 없습니다.`); return; }
+          const historyBlocks = MOCK_HISTORY_DATA[validHistoryDate] || [];
+          setHistoryDate(selectedDateStr); setBlocks(historyBlocks); 
+          if (validHistoryDate !== selectedDateStr) alert(`선택하신 날짜(${selectedDateStr})의 변경분은 없어서,\n가장 최근 변경일(${validHistoryDate})의 데이터를 불러왔습니다.`);
+          return;
+      }
+      if (!supabase) return;
+      const { data } = await supabase.from('requests').select('*').eq('status', 'APPROVED').eq('gnb_target', currentMenuPath).lte('created_at', selectedDateStr + ' 23:59:59').order('created_at', { ascending: false }).limit(1);
+      if (data && data.length > 0) {
+          const req = data[0];
+          setHistoryDate(selectedDateStr);
+          const snapshot = req.snapshot_new.map(b => ({ id: b.id, type: b.type, title: b.title, blockId: b.block_id_code, showTitle: b.show_title, isNew: false, ...b.content }));
+          setBlocks(snapshot);
+          const reqDate = new Date(req.created_at).toLocaleDateString();
+          if (reqDate !== new Date(selectedDateStr).toLocaleDateString()) alert(`선택하신 날짜(${selectedDateStr})의 변경분은 없어서,\n가장 최근 변경일(${reqDate})의 데이터를 불러왔습니다.`);
+      } else alert(`${selectedDateStr} 이전의 이력 데이터가 없습니다.`);
+  };
+
+  const renderCalendar = () => {
+      const year = currentCalendarDate.getFullYear();
+      const month = currentCalendarDate.getMonth();
+      const daysInMonth = getDaysInMonth(currentCalendarDate);
+      const firstDay = getFirstDayOfMonth(currentCalendarDate);
+      const days = [];
+      for (let i = 0; i < firstDay; i++) days.push(<div key={`empty-${i}`} className="h-10"></div>);
+      for (let d = 1; d <= daysInMonth; d++) {
+          const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+          const hasHistory = USE_MOCK_DATA ? MOCK_HISTORY_DATA.hasOwnProperty(dateStr) : false; 
+          days.push(
+              <button key={d} onClick={() => handleHistorySelect(dateStr)} className="h-10 rounded hover:bg-[#7387ff]/20 flex flex-col items-center justify-center relative group">
+                  <span className={`text-sm ${hasHistory ? 'text-white font-bold' : 'text-slate-400 group-hover:text-white'}`}>{d}</span>
+                  {hasHistory && <div className="w-1 h-1 bg-[#7387ff] rounded-full mt-1"></div>}
+              </button>
+          );
+      }
+      return days;
+  };
+
   const handleConfirmAction = async () => {
     const { type, data } = modalState;
-    if (type === 'DELETE_BLOCK') {
-        setBlocks(prev => prev.filter(b => b.id !== data));
-    }
+    if (type === 'DELETE_BLOCK') setBlocks(prev => prev.filter(b => b.id !== data));
     else if (type === 'DELETE_REQUEST') { 
-        if (!USE_MOCK_DATA && supabase) {
-            await supabase.from('requests').delete().eq('id', data);
-        }
+        if (!USE_MOCK_DATA && supabase) await supabase.from('requests').delete().eq('id', data);
         setSavedRequests(prev => prev.filter(r => r.id !== data)); 
-        setRequests(prev => prev.filter(r => r.id !== data));
         if (viewRequest?.id === data) setViewRequest(null); 
     }
-    else if (type === 'RESET') { 
-        setBlocks(JSON.parse(JSON.stringify(originalBlocks))); 
-    }
+    else if (type === 'RESET') { setBlocks(JSON.parse(JSON.stringify(originalBlocks))); setRequests([]); }
     else if (type === 'SAVE') { 
-        // 저장 시에는 로컬 에디터 상태를 그대로 유지하되, 요청 테이블에 PENDING 상태로 INSERT
         if (USE_MOCK_DATA) {
-            const newSavedReq = { 
-                id: `saved-${Date.now()}`, 
-                title: requestTitle, 
-                status: 'PENDING', 
-                createdAt: new Date().toISOString().split('T')[0], 
-                date: scheduleDate, 
-                requester: '관리자 (Mock)', 
-                changes: diffSummary, 
-                menuPath: currentMenuPath,
-                originalSnapshot: JSON.parse(JSON.stringify(originalBlocks)),
-                snapshot: JSON.parse(JSON.stringify(blocks)) 
-            };
+            alert('(Mock) 저장 완료 흉내');
+            const newSavedReq = { id: `saved-${Date.now()}`, title: requestTitle, status: 'PENDING', createdAt: new Date().toISOString().split('T')[0], date: scheduleDate, requester: '관리자 (Mock)', changes: diffSummary, menuPath: currentMenuPath, originalSnapshot: JSON.parse(JSON.stringify(originalBlocks)), snapshot: JSON.parse(JSON.stringify(blocks)) };
             setSavedRequests(prev => [newSavedReq, ...prev]);
-            setRequests(prev => [newSavedReq, ...prev]);
-            alert('(Mock) 편성 요청이 저장되었습니다.');
         } else {
             if (!supabase) return;
             const snapshot = blocks.map((b, idx) => ({ ...b, sort_order: idx }));
-            const { error } = await supabase.from('requests').insert({
-                requester: '관리자', title: requestTitle, gnb_target: currentMenuPath, snapshot_new: snapshot, snapshot_original: originalBlocks, status: 'PENDING'
-            });
-            if(!error) { alert('편성 요청이 저장되었습니다.'); refreshData(); } else { alert('저장 실패'); }
+            const { error } = await supabase.from('requests').insert({ requester: '관리자', title: requestTitle, gnb_target: currentMenuPath, snapshot_new: snapshot, snapshot_original: originalBlocks, status: 'PENDING' });
+            if(!error) { alert('편성 요청이 저장되었습니다.'); window.location.reload(); } else { alert('저장 실패'); }
         }
     }
     else if (type === 'APPROVE') { 
+        const targetReqId = data.id;
         if (USE_MOCK_DATA) { 
-            const targetReqId = data.id;
-            setRequests(prev => prev.map(r => r.id === targetReqId ? { ...r, status: 'APPROVED' } : r));
+            // 1. 요청 목록에서 제거 (Inbox) 및 전체 내역 업데이트 (History)
+            setRequests(prev => prev.filter(r => r.id !== targetReqId));
             setSavedRequests(prev => prev.map(r => r.id === targetReqId ? { ...r, status: 'APPROVED' } : r));
             
-            // 승인 시 해당 스냅샷으로 현재 에디터 상태를 덮어씀 (반영)
-            if (data.snapshot) {
-                setBlocks(JSON.parse(JSON.stringify(data.snapshot)));
-                setOriginalBlocks(JSON.parse(JSON.stringify(data.snapshot)));
+            // 2. 에디터 블록에 스냅샷 반영 (승인된 내용으로 덮어쓰기)
+            if (data.snapshot) { 
+                const newSnapshot = JSON.parse(JSON.stringify(data.snapshot));
+                setBlocks(newSnapshot); 
+                setOriginalBlocks(JSON.parse(JSON.stringify(newSnapshot))); 
             }
-            if (viewRequest && viewRequest.id === targetReqId) {
-                setViewRequest({ ...viewRequest, status: 'APPROVED' });
-            }
-            alert('(Mock) 반영되었습니다!'); 
+            alert(`요청('${data.title}')이 승인 및 반영되었습니다.`);
         } 
         else {
             if (!supabase) return;
-            // 1. 기존 블록 삭제
             await supabase.from('blocks').delete().eq('gnb_id', currentMenuId);
-            
-            // 2. 새 블록 삽입
-            const newBlocksData = data.snapshot.map((b, idx) => ({
-                gnb_id: currentMenuId, type: b.type, title: b.title, block_id_code: b.blockId, show_title: b.show_title, sort_order: idx,
-                content: { items: b.items, banners: b.banners, tabs: b.tabs, leadingBanners: b.leadingBanners, showPreview: b.showPreview, contentId: b.contentId, contentIdType: b.contentIdType, isTarget: b.isTarget, targetSeg: b.targetSeg, remarks: b.remarks }
-            }));
+            const newBlocksData = data.snapshot.map((b, idx) => ({ gnb_id: currentMenuId, type: b.type, title: b.title, block_id_code: b.blockId, show_title: b.show_title, sort_order: idx, content: { items: b.items, banners: b.banners, tabs: b.tabs, leadingBanners: b.leadingBanners, showPreview: b.showPreview, contentId: b.contentId, contentIdType: b.contentIdType, isTarget: b.isTarget, targetSeg: b.targetSeg, remarks: b.remarks } }));
             const { error } = await supabase.from('blocks').insert(newBlocksData);
-            
-            // 3. 요청 상태 업데이트
             if(!error) { 
                 await supabase.from('requests').update({ status: 'APPROVED' }).eq('id', data.id); 
                 alert('반영되었습니다!'); 
-                refreshData(); // 데이터 새로고침
-                setViewRequest(null);
-                setShowInbox(false);
-            } else {
-                console.error("Approval Error:", error);
-                alert("반영 중 오류가 발생했습니다.");
+                window.location.reload(); 
             }
         }
     }
     else if (type === 'DELETE_BANNER_CONFIRM') { handleDeleteBanner(); return; }
-    
     setModalState({ isOpen: false, type: null, data: null });
   };
   
@@ -1098,21 +1141,12 @@ export default function App() {
           else if (['BAND_BANNER', 'LONG_BANNER', 'BANNER_1', 'BANNER_2', 'BANNER_3', 'MENU_BLOCK'].includes(req.type)) { newBlock.type = req.type; const bannerType = req.type === 'BANNER_1' ? '1-COL' : req.type === 'BANNER_2' ? '2-COL' : req.type === 'BANNER_3' ? '3-COL' : req.type === 'MENU_BLOCK' ? 'MENU' : undefined; newBlock.banners = [{ title: req.title, type: bannerType, landingType: 'NONE' }]; } 
           else if (req.type === 'MULTI') { newBlock.type = 'MULTI'; newBlock.items = [1,2,3,4].map(i => ({ id: `req-m-${i}`, title: '추천' })); } 
           else { newBlock.type = req.type || 'VERTICAL'; newBlock.contentIdType = 'RACE'; newBlock.items = [{id:'i1',title:'Content'}]; } 
-          const _blocks = [...blocks]; _blocks.splice(dropIndex !== undefined ? dropIndex : _blocks.length, 0, newBlock); setBlocks(_blocks); 
-          // 드래그앤드랍 시엔 로컬 목록에서만 잠시 제거하는 시늉 (실제 DB 삭제는 아님)
-          // setRequests(requests.filter(r => r.id !== req.id)); 
+          const _blocks = [...blocks]; _blocks.splice(dropIndex !== undefined ? dropIndex : _blocks.length, 0, newBlock); setBlocks(_blocks); setRequests(requests.filter(r => r.id !== req.id)); 
       } 
   };
 
   const filteredRequests = requests.filter(req => inboxFilter === 'ALL' || req.gnb === inboxFilter).filter(r => r.status === 'PENDING');
-  // History shows APPROVED requests
-  const filteredSavedRequests = savedRequests.filter(req => {
-      const target = req.menuPath || req.gnb;
-      return unaFilter === 'ALL' || (target && target.includes(unaFilter));
-  });
-
-  const historyLogs = filteredSavedRequests.filter(req => req.status === 'APPROVED');
-  const unaRequests = filteredSavedRequests.filter(req => req.status !== 'APPROVED'); // UNA 탭에서 보여줄 목록 (PENDING, REJECTED)
+  const filteredSavedRequests = savedRequests.filter(req => unaFilter === 'ALL' || (req.menuPath && req.menuPath.includes(unaFilter)));
   
   if (isLoading) {
     return (
@@ -1131,12 +1165,12 @@ export default function App() {
                 <div className="flex items-center gap-2"><div className="w-1.5 h-5 bg-[#7387ff] rounded-sm"></div><h1 className="text-lg font-bold text-white">B tv simulator</h1></div>
                 <button onClick={() => setIsSidebarOpen(false)} className="md:hidden text-slate-400 hover:text-white"><X size={18}/></button>
             </div>
-            <div className={`flex-1 overflow-y-auto py-2 ${viewMode === 'HISTORY' ? 'opacity-50 pointer-events-none' : ''}`}>
+            <div className="flex-1 overflow-y-auto py-2">
                 {gnbList.map(menu => {
                     const isDivider = menu.name === '---';
                     if (isDivider) {
                         return (
-                            <div key={menu.id} draggable={viewMode !== 'HISTORY'} onDragStart={(e) => onDragStart(e, null, 'GNB', menu)} onDragOver={(e) => e.preventDefault()} onDrop={(e) => onMenuDrop(e, menu.id, 'GNB')}>
+                            <div key={menu.id} draggable onDragStart={(e) => onDragStart(e, null, 'GNB', menu)} onDragOver={(e) => e.preventDefault()} onDrop={(e) => onMenuDrop(e, menu.id, 'GNB')}>
                                 <div className="px-4 py-2 cursor-move group relative">
                                      <div className="h-px bg-[#44464f] w-full my-1"></div>
                                      <div className="hidden group-hover:block absolute right-2 top-1/2 -translate-y-1/2 bg-[#2e3038] p-1 rounded cursor-pointer" onClick={(e) => { e.stopPropagation(); confirmDeleteGnb(menu.id); }}><Trash2 size={10} className="text-red-400"/></div>
@@ -1145,18 +1179,16 @@ export default function App() {
                         )
                     }
                     return (
-                    <div key={menu.id} className="mb-1" draggable={viewMode !== 'HISTORY'} onDragStart={(e) => onDragStart(e, null, 'GNB', menu)} onDragOver={(e) => e.preventDefault()} onDrop={(e) => onMenuDrop(e, menu.id, 'GNB')}>
+                    <div key={menu.id} className="mb-1" draggable onDragStart={(e) => onDragStart(e, null, 'GNB', menu)} onDragOver={(e) => e.preventDefault()} onDrop={(e) => onMenuDrop(e, menu.id, 'GNB')}>
                         <div className={`flex items-center gap-2 px-4 py-2 cursor-pointer hover:bg-white/5 group ${currentMenuId === menu.id ? 'bg-white/10' : ''}`} onClick={() => handleMenuChange(menu.id, menu.name, (menu.children || []).length === 0)}>
                             <div className={`flex-1 flex items-center gap-2 ${currentMenuId === menu.id || (menu.children?.length > 0 && expandedMenuIds.includes(menu.id)) ? 'text-white font-bold' : 'text-slate-400'}`}>
                                 <span className="text-sm">{menu.name}</span>
                                 {menu.children && menu.children.length > 0 && <span className="opacity-70 ml-auto">{expandedMenuIds.includes(menu.id) ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}</span>}
                             </div>
-                            {viewMode !== 'HISTORY' && (
-                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button onClick={(e) => { e.stopPropagation(); setMenuNameInput(''); setIsDivider(false); setModalState({ isOpen: true, type: 'ADD_SUBMENU', data: { parentId: menu.id } }); }} className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-white" title="하위 메뉴 추가"><Plus size={12}/></button>
-                                    <button onClick={(e) => { e.stopPropagation(); confirmDeleteGnb(menu.id); }} className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-red-400" title="삭제"><Trash2 size={12}/></button>
-                                </div>
-                            )}
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button onClick={(e) => { e.stopPropagation(); setMenuNameInput(''); setIsDivider(false); setModalState({ isOpen: true, type: 'ADD_SUBMENU', data: { parentId: menu.id } }); }} className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-white" title="하위 메뉴 추가"><Plus size={12}/></button>
+                                <button onClick={(e) => { e.stopPropagation(); confirmDeleteGnb(menu.id); }} className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-red-400" title="삭제"><Trash2 size={12}/></button>
+                            </div>
                         </div>
                         {menu.children && menu.children.length > 0 && expandedMenuIds.includes(menu.id) && (
                             <div className="bg-black/20 pb-1">
@@ -1164,16 +1196,16 @@ export default function App() {
                                     const isSubDivider = child.name === '---';
                                     if(isSubDivider) {
                                         return (
-                                            <div key={child.id} draggable={viewMode !== 'HISTORY'} onDragStart={(e) => onDragStart(e, null, 'SUBMENU', child)} onDragOver={(e) => e.preventDefault()} onDrop={(e) => onMenuDrop(e, child.id, 'SUBMENU')} className="pl-8 pr-4 py-1 group relative cursor-move">
+                                            <div key={child.id} draggable onDragStart={(e) => onDragStart(e, null, 'SUBMENU', child)} onDragOver={(e) => e.preventDefault()} onDrop={(e) => onMenuDrop(e, child.id, 'SUBMENU')} className="pl-8 pr-4 py-1 group relative cursor-move">
                                                 <div className="h-px bg-[#44464f] w-full my-1"></div>
                                                 <div className="hidden group-hover:block absolute right-2 top-1/2 -translate-y-1/2 bg-[#2e3038] p-0.5 rounded cursor-pointer" onClick={(e) => { e.stopPropagation(); confirmDeleteSubMenu(menu.id, child.id); }}><Trash2 size={8} className="text-red-400"/></div>
                                             </div>
                                         )
                                     }
                                     return (
-                                    <div key={child.id} draggable={viewMode !== 'HISTORY'} onDragStart={(e) => onDragStart(e, null, 'SUBMENU', child)} onDragOver={(e) => e.preventDefault()} onDrop={(e) => onMenuDrop(e, child.id, 'SUBMENU')} className={`pl-8 pr-4 py-1.5 flex items-center justify-between group/sub cursor-pointer hover:bg-white/5 ${currentMenuId === child.id ? 'text-[#7387ff] font-bold bg-[#7387ff]/10 border-r-2 border-[#7387ff]' : 'text-slate-500'}`} onClick={(e) => { e.stopPropagation(); handleMenuChange(child.id, `${menu.name} > ${child.name}`, true); }}>
+                                    <div key={child.id} draggable onDragStart={(e) => onDragStart(e, null, 'SUBMENU', child)} onDragOver={(e) => e.preventDefault()} onDrop={(e) => onMenuDrop(e, child.id, 'SUBMENU')} className={`pl-8 pr-4 py-1.5 flex items-center justify-between group/sub cursor-pointer hover:bg-white/5 ${currentMenuId === child.id ? 'text-[#7387ff] font-bold bg-[#7387ff]/10 border-r-2 border-[#7387ff]' : 'text-slate-500'}`} onClick={(e) => { e.stopPropagation(); handleMenuChange(child.id, `${menu.name} > ${child.name}`, true); }}>
                                         <span className="text-xs">{child.name}</span>
-                                        {viewMode !== 'HISTORY' && <button onClick={(e) => { e.stopPropagation(); confirmDeleteSubMenu(menu.id, child.id); }} className="opacity-0 group-hover/sub:opacity-100 p-0.5 hover:bg-slate-700 rounded text-slate-500 hover:text-red-400"><Trash2 size={10}/></button>}
+                                        <button onClick={(e) => { e.stopPropagation(); confirmDeleteSubMenu(menu.id, child.id); }} className="opacity-0 group-hover/sub:opacity-100 p-0.5 hover:bg-slate-700 rounded text-slate-500 hover:text-red-400"><Trash2 size={10}/></button>
                                     </div>
                                     )
                                 })}
@@ -1182,9 +1214,7 @@ export default function App() {
                     </div>
                 )})}
             </div>
-            {viewMode !== 'HISTORY' && (
-                <div className="p-4 border-t border-[#2e3038]"><button onClick={() => { setMenuNameInput(''); setIsDivider(false); setModalState({ isOpen: true, type: 'ADD_GNB', data: null }); }} className="w-full py-2 border border-[#2e3038] hover:border-slate-500 rounded text-xs text-slate-400 hover:text-white flex items-center justify-center gap-2 transition-colors"><Plus size={14}/> 메뉴 추가</button></div>
-            )}
+            <div className="p-4 border-t border-[#2e3038]"><button onClick={() => { setMenuNameInput(''); setIsDivider(false); setModalState({ isOpen: true, type: 'ADD_GNB', data: null }); }} className="w-full py-2 border border-[#2e3038] hover:border-slate-500 rounded text-xs text-slate-400 hover:text-white flex items-center justify-center gap-2 transition-colors"><Plus size={14}/> 메뉴 추가</button></div>
         </div>
       </aside>
 
@@ -1197,8 +1227,8 @@ export default function App() {
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <div className="relative">
-                <select value={viewMode} onChange={(e) => { setViewMode(e.target.value); if(e.target.value === 'EDITOR') setHistoryDate(''); setHistoryRequest(null); }} className="bg-[#191b23] border border-[#2e3038] hover:border-[#7387ff] rounded px-3 py-1.5 text-xs font-bold text-white outline-none cursor-pointer appearance-none pr-8">
-                    <option value="EDITOR">에디터</option><option value="REQUEST">UNA ({filteredRequests.length})</option><option value="HISTORY">이력</option>
+                <select value={viewMode} onChange={(e) => { setViewMode(e.target.value); if(e.target.value === 'HISTORY') setModalState({ isOpen: true, type: 'HISTORY_SELECT' }); else if(e.target.value === 'EDITOR') setHistoryDate(''); }} className="bg-[#191b23] border border-[#2e3038] hover:border-[#7387ff] rounded px-3 py-1.5 text-xs font-bold text-white outline-none cursor-pointer appearance-none pr-8">
+                    <option value="EDITOR">에디터</option><option value="REQUEST">UNA ({savedRequests.length})</option><option value="HISTORY">이력</option>
                 </select>
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400"><ChevronDown size={12} /></div>
             </div>
@@ -1225,30 +1255,18 @@ export default function App() {
                     </div>
                 </>
             )}
-            {viewMode === 'HISTORY' && <button onClick={() => { setViewMode('EDITOR'); setHistoryDate(''); setBlocks(JSON.parse(JSON.stringify(originalBlocks))); setHistoryRequest(null); }} className="px-3 py-1.5 bg-[#7387ff] hover:bg-[#5b6dbf] rounded text-xs font-bold text-white flex items-center gap-1 transition-colors">에디터 복귀</button>}
+            {viewMode === 'HISTORY' && <button onClick={() => { setViewMode('EDITOR'); setHistoryDate(''); setBlocks(JSON.parse(JSON.stringify(originalBlocks))); }} className="px-3 py-1.5 bg-[#7387ff] hover:bg-[#5b6dbf] rounded text-xs font-bold text-white flex items-center gap-1 transition-colors">복귀</button>}
           </div>
         </header>
 
         {/* EDITOR & HISTORY VIEW */}
         {(viewMode === 'EDITOR' || viewMode === 'HISTORY') && (
           <div className="flex-1 flex overflow-hidden">
-            <div className={`flex-1 overflow-y-auto p-6 relative bg-gradient-to-b from-[#100d1d] to-[#0a0812] ${viewMode === 'HISTORY' ? 'grayscale-[0.1]' : ''}`}>
+            <div className={`flex-1 overflow-y-auto p-6 relative bg-gradient-to-b from-[#100d1d] to-[#0a0812] ${viewMode === 'HISTORY' ? 'grayscale-[0.3]' : ''}`}>
               <div className={`max-w-[1400px] mx-auto transition-all ${compareMode ? 'grid grid-cols-2 gap-8' : ''}`}>
                 {compareMode && (<div className="relative"><div className="sticky top-0 z-10 mb-4 flex justify-between items-center bg-[#100d1d]/80 backdrop-blur py-2 border-b border-orange-500/30"><span className="text-orange-400 text-sm font-bold flex items-center gap-2">변경 전 (As-Is)</span></div><div className="space-y-3 opacity-70 pointer-events-none grayscale-[0.5]">{originalBlocks.map((block, index) => (<div key={`orig-${block.id}`} className="relative"><div className="absolute -left-2 top-2 z-10 w-5 h-5 bg-slate-700 text-slate-400 rounded-full flex items-center justify-center text-xs font-mono">{index + 1}</div><BlockRenderer block={block} isOriginal={true} /></div>))}</div></div>)}
                 <div className={!compareMode ? 'max-w-[800px] mx-auto' : 'relative'}>
                   {compareMode && (<div className="sticky top-0 z-10 mb-4 flex justify-between items-center bg-[#100d1d]/80 backdrop-blur py-2 border-b border-[#7387ff]/30"><span className="text-[#7387ff] text-sm font-bold flex items-center gap-2"><CheckCircle size={14}/> 변경 후 (To-Be)</span></div>)}
-                  {viewMode === 'HISTORY' && historyRequest && (
-                      <div className="mb-6 p-4 bg-[#7387ff]/10 border border-[#7387ff]/30 rounded-lg flex items-center justify-between">
-                          <div>
-                              <div className="text-[#7387ff] font-bold text-sm mb-1">{historyRequest.title}</div>
-                              <div className="text-slate-400 text-xs flex items-center gap-2">
-                                  <span><User size={10} className="inline mr-1"/>{historyRequest.requester}</span>
-                                  <span><Clock size={10} className="inline mr-1"/>{historyRequest.createdAt}</span>
-                              </div>
-                          </div>
-                          <div className="text-xs bg-[#7387ff] text-white px-2 py-1 rounded">승인됨</div>
-                      </div>
-                  )}
                   <div className="space-y-3 pb-20">
                     {blocks.map((block, index) => {
                       const draggable = isDragEnabled && hoveredBlockIndex === index && !compareMode && viewMode !== 'HISTORY';
@@ -1265,31 +1283,6 @@ export default function App() {
                 </div>
               </div>
             </div>
-            
-            {/* History Logs Panel */}
-            {viewMode === 'HISTORY' && (
-                <div className="w-80 border-l border-[#2e3038] bg-[#161820] flex flex-col">
-                    <div className="p-4 border-b border-[#2e3038] font-bold text-white flex items-center gap-2"><FileClock size={16}/> 승인 로그</div>
-                    <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                        {historyLogs.length === 0 ? <div className="text-slate-500 text-xs text-center py-10">승인된 이력이 없습니다.</div> : 
-                         historyLogs.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)).map(log => (
-                             <div key={log.id} onClick={() => {
-                                 setBlocks(log.snapshot);
-                                 setHistoryRequest(log);
-                             }} className={`p-3 rounded border cursor-pointer transition-all ${historyRequest?.id === log.id ? 'bg-[#7387ff]/10 border-[#7387ff] ring-1 ring-[#7387ff]' : 'bg-[#191b23] border-[#2e3038] hover:border-slate-500'}`}>
-                                 <div className="flex justify-between items-start mb-1">
-                                     <span className="text-xs font-bold text-slate-200 line-clamp-1">{log.title}</span>
-                                     <span className="text-[10px] text-slate-500 whitespace-nowrap">{new Date(log.createdAt).toLocaleDateString()}</span>
-                                 </div>
-                                 <div className="text-[10px] text-slate-400 mb-2">{log.requester}</div>
-                                 <div className="text-[10px] bg-green-900/30 text-green-400 px-1.5 py-0.5 rounded w-fit flex items-center gap-1"><CheckSquare size={10}/> APPROVED</div>
-                             </div>
-                         ))
-                        }
-                    </div>
-                </div>
-            )}
-
             {/* Inbox */}
             <div className={`fixed right-0 top-14 bottom-0 w-80 bg-[#161820] border-l border-[#2e3038] shadow-2xl transition-transform duration-300 z-30 flex flex-col ${showInbox ? 'translate-x-0' : 'translate-x-full'}`}>
               <div className="p-4 border-b border-[#2e3038] bg-[#191b23]">
@@ -1302,70 +1295,239 @@ export default function App() {
                 </div>
               </div>
               <div className="p-4 border-b border-[#2e3038]"><button onClick={() => setModalState({ isOpen: true, type: 'NEW_REQUEST', data: null })} className="w-full py-2 bg-[#2e3038] hover:bg-[#3e404b] text-white text-xs font-bold rounded flex items-center justify-center gap-2 transition-colors"><Plus size={14}/> 신규 요청 등록</button></div>
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">{filteredRequests.length === 0 ? <div className="text-center text-slate-500 text-xs py-10">요청이 없습니다.</div> : filteredRequests.map(req => (<div key={req.id} draggable={req.status === 'PENDING'} onDragStart={(e) => onDragStart(e, null, 'REQUEST', req)} className={`border p-3 rounded-lg transition-colors group relative ${req.status === 'PENDING' ? 'bg-[#100d1d] border-[#2e3038] cursor-grab hover:border-[#7387ff] active:cursor-grabbing' : 'bg-[#191b23] border-[#2e3038] opacity-50 cursor-default'}`}><div className="flex justify-between items-start mb-2"><span className="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded flex items-center gap-1"><User size={8} /> {req.requester}</span>{req.status === 'REJECTED' && <span className="text-[10px] text-red-500 font-bold border border-red-500/50 px-1 rounded">거절됨</span>}<button onClick={(e) => reqDeleteRequest(req.id, e)} className="p-1 hover:bg-[#2e3038] rounded text-slate-500 hover:text-red-500 transition-colors" title="요청 삭제"><Trash2 size={12}/></button></div><h4 className="text-sm font-bold text-slate-200 mb-1">{req.title}</h4><div className="text-[10px] text-slate-500 mb-2 space-y-0.5"><p>{req.desc}</p><p className="text-slate-400">위치: {req.location || '-'}</p>{req.remarks && <p className="text-yellow-500/70">비고: {req.remarks}</p>}</div><div className="mt-2 flex justify-between items-center"><span className="text-[9px] text-[#7387ff] border border-[#7387ff]/30 px-1.5 py-0.5 rounded">{req.type}</span><span className="text-[9px] text-slate-500">{req.gnb}</span></div></div>))}</div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">{filteredRequests.length === 0 ? <div className="text-center text-slate-500 text-xs py-10">요청이 없습니다.</div> : filteredRequests.map(req => (<div key={req.id} draggable={req.status === 'PENDING'} onDragStart={(e) => onDragStart(e, null, 'REQUEST', req)} className={`border p-3 rounded-lg transition-colors group relative ${req.status === 'PENDING' ? 'bg-[#100d1d] border-[#2e3038] cursor-grab hover:border-[#7387ff] active:cursor-grabbing' : 'bg-[#191b23] border-[#2e3038] opacity-50 cursor-default'}`}><div className="flex justify-between items-start mb-2"><span className="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded flex items-center gap-1"><User size={8} /> {req.requester}</span>{req.status === 'REJECTED' && <span className="text-[10px] text-red-500 font-bold border border-red-500/50 px-1 rounded">거절됨</span>}</div><h4 className="text-sm font-bold text-slate-200 mb-1">{req.title}</h4><div className="text-[10px] text-slate-500 mb-2 space-y-0.5"><p>{req.desc}</p><p className="text-slate-400">위치: {req.location || '-'}</p>{req.remarks && <p className="text-yellow-500/70">비고: {req.remarks}</p>}</div><div className="mt-2 flex justify-between items-center"><span className="text-[9px] text-[#7387ff] border border-[#7387ff]/30 px-1.5 py-0.5 rounded">{req.type}</span><span className="text-[9px] text-slate-500">{req.gnb}</span></div></div>))}</div>
             </div>
           </div>
         )}
 
-        {/* REQUEST VIEW (UNA 요청) */}
+        {/* UNA (REQUEST HISTORY) VIEW */}
         {viewMode === 'REQUEST' && (
-          <div className="flex-1 flex flex-col overflow-hidden bg-[#0a0812]">
-            {viewRequest ? (
-                // DETAIL VIEW
-                <div className="flex flex-col h-full">
-                    <div className="h-14 border-b border-[#2e3038] flex items-center px-6 gap-3 bg-[#191b23] shrink-0">
-                        <button onClick={() => setViewRequest(null)} className="p-1 hover:bg-white/10 rounded-full text-slate-400 hover:text-white"><ChevronLeft size={20} /></button>
-                        <h2 className="text-base font-bold text-white">{viewRequest.title}</h2>
-                        <span className={`text-[10px] px-2 py-0.5 rounded ${viewRequest.status === 'APPROVED' ? 'bg-green-900/50 text-green-400' : 'bg-yellow-900/50 text-yellow-400'}`}>{viewRequest.status}</span>
-                    </div>
-                    <div className="flex-1 flex overflow-hidden">
-                        <div className="w-[300px] border-r border-[#2e3038] bg-[#161820] flex flex-col p-5 overflow-y-auto">
-                            <h3 className="text-xs font-bold text-slate-500 mb-4 uppercase tracking-wider flex items-center justify-between">변경 요약 <span className="bg-slate-700 text-white px-1.5 rounded-full text-[10px]">{viewRequest.changes.length}</span></h3>
-                            <div className="space-y-2">{viewRequest.changes.map((diff, idx) => ( <div key={idx} className="flex flex-col p-3 rounded bg-[#100d1d] border border-[#2e3038] gap-1"><div className="flex items-center gap-2"><div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${diff.type === '신규' ? 'bg-green-400' : diff.type === '삭제' ? 'bg-red-400' : 'bg-blue-400'}`}></div><span className="text-xs text-slate-300 font-bold truncate">{diff.block?.title || '알림'}</span><span className={`text-[9px] px-1 rounded ml-auto ${diff.type === '신규' ? 'bg-green-900/50 text-green-400' : diff.type === '삭제' ? 'bg-red-900/50 text-red-400' : 'bg-blue-900/50 text-blue-400'}`}>{diff.type}</span></div><p className="text-[11px] text-slate-500 pl-3.5 leading-tight">{diff.desc}</p></div> ))}</div>
-                            <button onClick={() => reqApprove(viewRequest)} disabled={viewRequest.status === 'APPROVED'} className="mt-4 w-full py-3 bg-[#7387ff] hover:bg-[#5b6dbf] disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg text-sm font-bold transition-colors">{viewRequest.status === 'APPROVED' ? '이미 반영됨' : '반영 완료'}</button>
+            <div className="flex-1 overflow-y-auto p-6 bg-[#100d1d]">
+                <div className="max-w-5xl mx-auto">
+                    <div className="mb-6 flex items-center justify-between">
+                        <h2 className="text-xl font-bold text-white flex items-center gap-2"><Inbox className="text-[#7387ff]"/> UNA (편성 요청 내역)</h2>
+                        <div className="flex items-center gap-2">
+                            <span className="text-slate-500 text-xs">메뉴 필터:</span>
+                            <select className="bg-[#191b23] border border-[#2e3038] rounded px-3 py-1.5 text-xs text-slate-300 outline-none" value={unaFilter} onChange={(e) => setUnaFilter(e.target.value)}>
+                                <option value="ALL">전체</option>
+                                {gnbList.map(g => <option key={g.id} value={g.name}>{g.name}</option>)}
+                            </select>
                         </div>
-                        <div className="flex-1 p-8 overflow-y-auto bg-[#100d1d]">
-                           <div className="grid grid-cols-2 gap-8 max-w-[1200px] mx-auto">
-                               <div className="relative opacity-60 grayscale-[0.5] pointer-events-none"><div className="sticky top-0 z-10 mb-6 flex justify-center"><span className="bg-orange-500/20 text-orange-400 border border-orange-500/50 px-3 py-1 rounded-full text-xs font-bold">변경 전 (As-Is)</span></div><div className="space-y-4">{viewRequest.originalSnapshot?.map((block, i) => <BlockRenderer key={i} block={block} isDragging={false} isOriginal={true} readOnly={true} />)}</div></div>
-                               <div className="relative"><div className="sticky top-0 z-10 mb-6 flex justify-center"><span className="bg-[#7387ff]/20 text-[#7387ff] border border-[#7387ff]/50 px-3 py-1 rounded-full text-xs font-bold">변경 후 (To-Be)</span></div><div className="space-y-4">{viewRequest.snapshot?.map((block, i) => <BlockRenderer key={i} block={block} isDragging={false} isOriginal={false} readOnly={true} />)}</div></div>
+                    </div>
+
+                    <div className="space-y-4">
+                        {filteredSavedRequests.length === 0 ? (
+                            <div className="text-center py-20 text-slate-500 border border-dashed border-[#2e3038] rounded-lg">요청 내역이 없습니다.</div>
+                        ) : (
+                            filteredSavedRequests.map(req => (
+                                <div key={req.id} className={`bg-[#191b23] border border-[#2e3038] rounded-lg p-5 transition-all hover:border-[#7387ff]/50 flex gap-4 ${req.status === 'APPROVED' ? 'opacity-70' : ''}`}>
+                                    {/* Status Icon */}
+                                    <div className="flex flex-col items-center pt-1 gap-2 min-w-[60px]">
+                                        {req.status === 'PENDING' ? <div className="w-10 h-10 rounded-full bg-yellow-500/20 text-yellow-500 flex items-center justify-center"><Clock size={20}/></div>
+                                        : req.status === 'APPROVED' ? <div className="w-10 h-10 rounded-full bg-green-500/20 text-green-500 flex items-center justify-center"><Check size={20}/></div>
+                                        : <div className="w-10 h-10 rounded-full bg-red-500/20 text-red-500 flex items-center justify-center"><XCircle size={20}/></div>}
+                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${req.status === 'PENDING' ? 'bg-yellow-900/30 text-yellow-500' : req.status === 'APPROVED' ? 'bg-green-900/30 text-green-500' : 'bg-red-900/30 text-red-500'}`}>{req.status}</span>
+                                    </div>
+
+                                    {/* Content */}
+                                    <div className="flex-1">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <div>
+                                                <h3 className="text-lg font-bold text-slate-200 mb-1">{req.title}</h3>
+                                                <div className="flex items-center gap-3 text-xs text-slate-400">
+                                                    <span className="flex items-center gap-1"><User size={12}/> {req.requester} ({req.team})</span>
+                                                    <span className="flex items-center gap-1"><CalendarIcon size={12}/> {req.createdAt}</span>
+                                                    <span className="flex items-center gap-1 px-2 py-0.5 bg-[#2e3038] rounded text-slate-300">{req.gnb}</span>
+                                                </div>
+                                            </div>
+                                            {/* Action Buttons for Pending Requests */}
+                                            {req.status === 'PENDING' && (
+                                                <div className="flex gap-2">
+                                                    <button onClick={() => handleRejectRequest(req.id)} className="px-3 py-1.5 border border-red-500/30 text-red-400 hover:bg-red-500/10 rounded text-xs font-bold transition-colors">반려</button>
+                                                    <button onClick={() => reqApprove(req)} className="px-4 py-1.5 bg-[#7387ff] hover:bg-[#5b6dbf] text-white rounded text-xs font-bold transition-colors shadow-lg shadow-[#7387ff]/20">승인</button>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="bg-[#100d1d] rounded p-3 text-xs text-slate-400 mb-3 border border-[#2e3038]">
+                                            <p className="mb-1"><span className="text-slate-500 font-bold mr-2">요청 내용:</span> {req.desc}</p>
+                                            {req.remarks && <p><span className="text-slate-500 font-bold mr-2">비고:</span> {req.remarks}</p>}
+                                        </div>
+
+                                        {/* Changes Summary */}
+                                        {req.changes && req.changes.length > 0 && (
+                                            <div className="space-y-1">
+                                                {req.changes.map((change, idx) => (
+                                                    <div key={idx} className="flex items-center gap-2 text-xs">
+                                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${change.type === '신규' ? 'bg-blue-500/20 text-blue-400' : 'bg-orange-500/20 text-orange-400'}`}>{change.type}</span>
+                                                        <span className="text-slate-300">{change.desc}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* Modal */}
+        {modalState.isOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+            <div className={`bg-[#191b23] rounded-xl border border-[#2e3038] shadow-2xl overflow-hidden flex flex-col max-h-[85vh] ${modalState.type === 'NEW_REQUEST' || modalState.type === 'ADD_BLOCK' || modalState.type === 'HISTORY_SELECT' ? 'w-[500px]' : 'w-[450px]'}`}>
+              <div className="p-5 border-b border-[#2e3038] flex justify-between items-center bg-[#1e2029] shrink-0">
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  {modalState.type === 'HISTORY_SELECT' ? '히스토리 탐색' : modalState.type === 'NEW_REQUEST' ? '신규 프로모션 요청 등록' : modalState.type === 'ADD_BLOCK' ? '신규 블록 생성' : modalState.type === 'SAVE' ? '편성 요청 정보 입력' : modalState.type === 'APPROVE' ? '편성 반영 확인' : modalState.type === 'EDIT_ID' ? '블록 설정 수정' : modalState.type === 'EDIT_BANNER' ? '배너 수정' : modalState.type === 'EDIT_CONTENT' ? '콘텐츠 수정' : modalState.type === 'EDIT_TAB_NAME' ? '탭 이름 수정' : modalState.type === 'ADD_GNB' ? '최상위 메뉴 추가' : modalState.type === 'ADD_SUBMENU' ? '하위 메뉴 추가' : modalState.type === 'DELETE_BANNER_CONFIRM' ? '삭제 확인' : '확인'}
+                </h3>
+                <button onClick={() => setModalState({ ...modalState, isOpen: false })}><X size={18} className="text-slate-500 hover:text-white"/></button>
+              </div>
+              <div className="p-6 overflow-y-auto">
+                  {modalState.type === 'HISTORY_SELECT' && (
+                      <div className="space-y-4">
+                          <p className="text-sm text-slate-400 mb-2">확인하고 싶은 과거 날짜를 선택해주세요.</p>
+                          <div className="bg-[#100d1d] border border-[#2e3038] rounded-lg p-4">
+                              <div className="flex justify-between items-center mb-4"><button onClick={handlePrevMonth} className="p-1 hover:bg-[#2e3038] rounded text-slate-400 hover:text-white"><ChevronLeft size={16}/></button><span className="text-sm font-bold text-white">{currentCalendarDate.getFullYear()}년 {currentCalendarDate.getMonth() + 1}월</span><button onClick={handleNextMonth} className="p-1 hover:bg-[#2e3038] rounded text-slate-400 hover:text-white"><ChevronRight size={16}/></button></div>
+                              <div className="grid grid-cols-7 gap-1 text-center text-xs text-slate-500 mb-2"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
+                              <div className="grid grid-cols-7 gap-1">{renderCalendar()}</div>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-slate-500 mt-2"><div className="w-2 h-2 bg-[#7387ff] rounded-full"></div><span>변경 이력이 있는 날짜</span></div>
+                      </div>
+                  )}
+                  {(modalState.type === 'ADD_GNB' || modalState.type === 'ADD_SUBMENU') && (
+                      <div className="space-y-4">
+                          <div><label className="block text-xs font-bold text-slate-500 mb-1">{modalState.type === 'ADD_GNB' ? 'GNB 메뉴 이름' : '하위 메뉴 이름'}</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={menuNameInput} onChange={e => setMenuNameInput(e.target.value)} placeholder="메뉴 이름 입력" autoFocus disabled={isDivider} onKeyDown={(e) => { if(e.key === 'Enter') handleAddMenu(); }} /></div>
+                          <div className="flex items-center pt-2"><label className="flex items-center gap-2 cursor-pointer text-sm text-slate-300"><input type="checkbox" checked={isDivider} onChange={e => { setIsDivider(e.target.checked); if(e.target.checked) setMenuNameInput('---'); else setMenuNameInput(''); }} className="accent-[#7387ff]" />구분선 추가</label></div>
+                      </div>
+                  )}
+                  {modalState.type === 'NEW_REQUEST' && (
+                    <div className="space-y-4">
+                      <div><label className="block text-xs font-bold text-slate-500 mb-1">GNB 메뉴 (대상)</label><select className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newRequestData.gnb} onChange={e => setNewRequestData({...newRequestData, gnb: e.target.value})}>{gnbList.map(m => (<React.Fragment key={m.id}><option value={m.name}>{m.name}</option></React.Fragment>))}</select></div>
+                      <div className="grid grid-cols-2 gap-4">
+                          <div><label className="block text-xs font-bold text-slate-500 mb-1">요청자</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newRequestData.requester} onChange={e => setNewRequestData({...newRequestData, requester: e.target.value})} placeholder="요청자 이름" /></div>
+                          <div><label className="block text-xs font-bold text-slate-500 mb-1">소속 팀</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newRequestData.team} onChange={e => setNewRequestData({...newRequestData, team: e.target.value})} placeholder="예: 편성1팀" /></div>
+                      </div>
+                      <div><label className="block text-xs font-bold text-slate-500 mb-1">제목</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newRequestData.headline} onChange={e => setNewRequestData({...newRequestData, headline: e.target.value})} placeholder="요청 제목 입력"/></div>
+                      <div><label className="block text-xs font-bold text-slate-500 mb-1">편성 유형</label><select className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newRequestData.type} onChange={e => setNewRequestData({...newRequestData, type: e.target.value})}><optgroup label="콘텐츠 블록"><option value="VERTICAL">세로 포스터</option><option value="HORIZONTAL">가로 포스터</option><option value="HORIZONTAL_MINI">미니 가로</option><option value="TAB">탭 블록</option><option value="MULTI">멀티 블록</option></optgroup><optgroup label="배너"><option value="BIG_BANNER">빅배너</option><option value="BAND_BANNER">띠배너</option><option value="LONG_BANNER">롱배너</option><option value="BANNER_1">1단 배너</option><option value="BANNER_2">2단 배너</option><option value="BANNER_3">3단 배너</option></optgroup></select></div>
+                      <div><label className="block text-xs font-bold text-slate-500 mb-1">편성 요청 위치</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newRequestData.location} onChange={e => setNewRequestData({...newRequestData, location: e.target.value})} placeholder="예: TV 방송 홈 상단"/></div>
+                      <div><label className="block text-xs font-bold text-slate-500 mb-1">상세 내용</label><textarea className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none h-20" value={newRequestData.desc} onChange={e => setNewRequestData({...newRequestData, desc: e.target.value})} placeholder="요청 상세 내용 입력"/></div>
+                      <div><label className="block text-xs font-bold text-slate-500 mb-1">비고</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newRequestData.remarks} onChange={e => setNewRequestData({...newRequestData, remarks: e.target.value})} placeholder="특이사항 입력"/></div>
+                      <div><label className="block text-xs font-bold text-slate-500 mb-1">Jira 티켓 링크</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newRequestData.jiraLink} onChange={e => setNewRequestData({...newRequestData, jiraLink: e.target.value})} placeholder="http://jira..." /></div>
+                    </div>
+                  )}
+                  {modalState.type === 'ADD_BLOCK' && (
+                    <div className="space-y-4">
+                      <div><label className="block text-xs font-bold text-slate-500 mb-1">블록 타이틀</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newBlockData.title} onChange={e => setNewBlockData({...newBlockData, title: e.target.value})} /></div>
+                      <div><label className="block text-xs font-bold text-slate-500 mb-2">블록 종류</label><select className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={blockCategory} onChange={(e) => setBlockCategory(e.target.value)}><option value="CONTENT">콘텐츠 블록</option><option value="BANNER">배너 블록</option><option value="MULTI">멀티 블록</option></select></div>
+                      {blockCategory === 'CONTENT' && (
+                        <div className="space-y-4 pt-2 border-t border-[#2e3038]">
+                           <div className="grid grid-cols-2 gap-4">
+                             <div><label className="block text-xs font-bold text-slate-500 mb-1">상세 유형</label><select className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newBlockData.type} onChange={e => setNewBlockData({...newBlockData, type: e.target.value})}><option value="VERTICAL">세로 포스터</option><option value="HORIZONTAL">가로 포스터</option><option value="HORIZONTAL_MINI">미니 가로</option><option value="TAB">탭 블록</option></select></div>
+                             <div className="flex items-center pt-6"><label className="flex items-center gap-2 cursor-pointer text-sm text-slate-300"><input type="checkbox" checked={newBlockData.showPreview} onChange={e => setNewBlockData({...newBlockData, showPreview: e.target.checked})} className="accent-[#7387ff]" />프리뷰 영역 노출</label></div>
+                           </div>
+                           <div className="grid grid-cols-3 gap-2">
+                             <div className="col-span-1"><label className="block text-xs font-bold text-slate-500 mb-1">ID 유형</label><select className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none" value={newBlockData.contentIdType} onChange={e => setNewBlockData({...newBlockData, contentIdType: e.target.value})}><option value="LIBRARY">라이브러리</option><option value="RACE">RACE</option></select></div>
+                             <div className="col-span-2"><label className="block text-xs font-bold text-slate-500 mb-1">ID값</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none font-mono" value={newBlockData.contentId} onChange={e => setNewBlockData({...newBlockData, contentId: e.target.value})} placeholder={newBlockData.contentIdType === 'LIBRARY' ? 'NB...' : '...RACE'}/></div>
+                           </div>
+                           <div className="bg-[#100d1d] p-3 rounded border border-[#2e3038] space-y-2">
+                             <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-300"><input type="checkbox" checked={newBlockData.useLeadingBanner} onChange={e => setNewBlockData({...newBlockData, useLeadingBanner: e.target.checked})} className="accent-[#7387ff]" />앞단 배너 추가</label>
+                             {newBlockData.useLeadingBanner && (
+                               <div className="pl-5 space-y-2 border-l-2 border-[#2e3038] ml-1">
+                                   <div><label className="block text-[10px] text-slate-500 mb-1">배너명</label><input type="text" className="w-full bg-[#191b23] border border-[#2e3038] rounded px-2 py-1 text-xs text-white" value={newBlockData.leadingBannerTitle} onChange={e => setNewBlockData({...newBlockData, leadingBannerTitle: e.target.value})} placeholder="배너 이름 입력" /></div>
+                                   <div><label className="block text-[10px] text-slate-500 mb-1">배너 크기</label><select className="w-full bg-[#191b23] border border-[#2e3038] rounded px-2 py-1 text-xs text-white" value={newBlockData.leadingBannerType} onChange={e => setNewBlockData({...newBlockData, leadingBannerType: e.target.value})}><option value="1-COL">1단</option><option value="2-COL">2단</option><option value="3-COL">3단</option></select></div>
+                                   <div className="grid grid-cols-2 gap-2"><div><label className="block text-[10px] text-slate-500 mb-1">랜딩 유형</label><input type="text" className="w-full bg-[#191b23] border border-[#2e3038] rounded px-2 py-1 text-xs text-white" value={newBlockData.leadingBannerLanding} onChange={e => setNewBlockData({...newBlockData, leadingBannerLanding: e.target.value})} placeholder="직접 입력" /></div><div><label className="block text-[10px] text-slate-500 mb-1">랜딩 값</label><input type="text" className="w-full bg-[#191b23] border border-[#2e3038] rounded px-2 py-1 text-xs text-white" value={newBlockData.leadingBannerValue} onChange={e => setNewBlockData({...newBlockData, leadingBannerValue: e.target.value})} /></div></div>
+                               </div>
+                             )}
                            </div>
                         </div>
-                    </div>
-                </div>
-            ) : (
-                // LIST VIEW
-                <div className="flex-1 p-10 overflow-y-auto">
-                   <div className="flex justify-between items-center mb-6">
-                      <h2 className="text-xl font-bold text-white flex items-center gap-2"><FileText size={24} className="text-[#7387ff]" /> UNA 요청 목록</h2>
-                      <div className="flex items-center gap-2">
-                        <Filter size={14} className="text-slate-500"/>
-                        <select className="bg-[#191b23] border border-[#2e3038] rounded px-3 py-1.5 text-xs text-slate-300 outline-none" value={unaFilter} onChange={(e) => setUnaFilter(e.target.value)}>
-                            <option value="ALL">전체 메뉴</option>
-                            {gnbList.map(m => (
-                                <React.Fragment key={m.id}>
-                                <option value={m.name}>{m.name}</option>
-                                {/* {m.children?.map(c => <option key={c.id} value={c.name}>- {c.name}</option>)} */}
-                                </React.Fragment>
-                            ))}
-                        </select>
+                      )}
+                      {blockCategory === 'BANNER' && (
+                        <div className="space-y-4 pt-2 border-t border-[#2e3038]">
+                          <div><label className="block text-xs font-bold text-slate-500 mb-1">배너 유형</label><select className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-orange-500 outline-none" value={newBlockData.type} onChange={e => setNewBlockData({...newBlockData, type: e.target.value})}><option value="BANNER_1">1단 배너</option><option value="BANNER_2">2단 배너</option><option value="BANNER_3">3단 배너</option><option value="BAND_BANNER">띠배너</option><option value="BIG_BANNER">빅배너</option><option value="LONG_BANNER">롱배너</option><option value="MENU_BLOCK">메뉴 블록</option></select></div>
+                          <div className="bg-[#100d1d] p-3 rounded border border-[#2e3038] space-y-3">
+                             <div className="text-xs font-bold text-orange-500 mb-1">초기 배너 속성</div>
+                             <div><label className="block text-[10px] text-slate-500 mb-1">배너명</label><input type="text" className="w-full bg-[#191b23] border border-[#2e3038] rounded px-2 py-1 text-xs text-white" value={newBlockData.bannerTitle} onChange={e => setNewBlockData({...newBlockData, bannerTitle: e.target.value})} placeholder="배너 이름 입력" /></div>
+                             <div className="grid grid-cols-2 gap-2"><div><label className="block text-[10px] text-slate-500 mb-1">랜딩 유형</label><input type="text" className="w-full bg-[#191b23] border border-[#2e3038] rounded px-2 py-1 text-xs text-white" value={newBlockData.bannerLanding} onChange={e => setNewBlockData({...newBlockData, bannerLanding: e.target.value})} placeholder="직접 입력" /></div><div><label className="block text-[10px] text-slate-500 mb-1">랜딩 값</label><input type="text" className="w-full bg-[#191b23] border border-[#2e3038] rounded px-2 py-1 text-xs text-white" value={newBlockData.bannerValue} onChange={e => setNewBlockData({...newBlockData, bannerValue: e.target.value})} /></div></div>
+                          </div>
+                        </div>
+                      )}
+                      {blockCategory === 'MULTI' && (
+                        <div className="space-y-4 pt-2 border-t border-[#2e3038]">
+                           <div className="grid grid-cols-3 gap-2"><div className="col-span-1"><label className="block text-xs font-bold text-slate-500 mb-1">ID 유형</label><select className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none" value={newBlockData.contentIdType} onChange={e => setNewBlockData({...newBlockData, contentIdType: e.target.value})}><option value="LIBRARY">라이브러리</option></select></div><div className="col-span-2"><label className="block text-xs font-bold text-slate-500 mb-1">ID값</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none font-mono" value={newBlockData.contentId} onChange={e => setNewBlockData({...newBlockData, contentId: e.target.value})} placeholder="NB..." /></div></div>
+                           <div className="flex items-center pt-2"><label className="flex items-center gap-2 cursor-pointer text-sm text-slate-300"><input type="checkbox" checked={newBlockData.showPreview} onChange={e => setNewBlockData({...newBlockData, showPreview: e.target.checked})} className="accent-[#7387ff]" />프리뷰 영역 노출</label></div>
+                        </div>
+                      )}
+                      <div className="border-t border-[#2e3038] pt-4 space-y-4">
+                         <div className="flex items-center justify-between"><label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-300"><input type="checkbox" checked={newBlockData.isTarget} onChange={e => setNewBlockData({...newBlockData, isTarget: e.target.checked})} className="accent-pink-500" /> 타겟 설정</label></div>
+                         {newBlockData.isTarget && <div><label className="block text-xs font-bold text-slate-500 mb-1">Filter Seg 값</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-pink-500 outline-none" value={newBlockData.targetSeg} onChange={e => setNewBlockData({...newBlockData, targetSeg: e.target.value})} placeholder="예: Promotion_1234" /></div>}
+                         <div><label className="block text-xs font-bold text-slate-500 mb-1">비고</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newBlockData.remarks} onChange={e => setNewBlockData({...newBlockData, remarks: e.target.value})} placeholder="추가 요청사항 입력" /></div>
                       </div>
+                    </div>
+                  )}
+                  {modalState.type === 'EDIT_ID' && (
+                   <div className="space-y-4">
+                      <div><label className="block text-xs font-bold text-slate-500 mb-1">블록명</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-[#7387ff]" value={editIdData.title} onChange={e => setEditIdData({...editIdData, title: e.target.value})} /></div>
+                      <div><label className="block text-xs font-bold text-slate-500 mb-1">ID 유형</label><select className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-[#7387ff]" value={editIdData.idType} onChange={e => setEditIdData({...editIdData, idType: e.target.value})}><option value="LIBRARY">라이브러리</option><option value="RACE">RACE</option></select></div>
+                      <div><label className="block text-xs font-bold text-slate-500 mb-1">ID 값</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white font-mono outline-none focus:border-[#7387ff]" value={editIdData.idValue} onChange={e => setEditIdData({...editIdData, idValue: e.target.value})} autoFocus/></div>
+                      <div className="flex items-center pt-2"><label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-300"><input type="checkbox" checked={editIdData.showTitle} onChange={e => setEditIdData({...editIdData, showTitle: e.target.checked})} className="accent-[#7387ff]" /> 블록명 노출</label></div>
+                      <div className="border-t border-[#2e3038] pt-3">
+                        <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-300 mb-2"><input type="checkbox" checked={editIdData.isTarget} onChange={e => setEditIdData({...editIdData, isTarget: e.target.checked})} className="accent-pink-500" /> 타겟 설정</label>
+                        {editIdData.isTarget && <div><label className="block text-xs font-bold text-slate-500 mb-1">Filter Seg 값</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-pink-500 outline-none" value={editIdData.targetSeg} onChange={e => setEditIdData({...editIdData, targetSeg: e.target.value})} placeholder="예: Promotion_1234" /></div>}
+                      </div>
+                      <div><label className="block text-xs font-bold text-slate-500 mb-1">비고</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-[#7387ff]" value={editIdData.remarks} onChange={e => setEditIdData({...editIdData, remarks: e.target.value})} /></div>
                    </div>
-                   {unaRequests.length === 0 ? (<div className="text-center text-slate-500 mt-20">대기 중인 요청서가 없습니다.</div>) : (
-                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {unaRequests.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map(req => (
-                              <div key={req.id} onClick={() => setViewRequest(req)} className="bg-[#191b23] border border-[#2e3038] hover:border-[#7387ff] rounded-xl p-5 cursor-pointer transition-all hover:shadow-lg group relative">
-                                  <button onClick={(e) => reqDeleteRequest(req.id, e)} className="absolute top-4 right-4 text-slate-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity z-10 p-1 hover:bg-[#2e3038] rounded" title="요청서 삭제"><Trash2 size={16} /></button>
-                                  <div className="flex justify-between items-start mb-4"><span className={`text-[10px] px-2 py-1 rounded font-bold ${req.status === 'REJECTED' ? 'bg-red-900/30 text-red-400' : 'bg-yellow-900/30 text-yellow-400'}`}>{req.status}</span><span className="text-slate-500 text-xs">{req.createdAt}</span></div>
-                                  <h3 className="text-lg font-bold text-white mb-2 group-hover:text-[#7387ff] transition-colors">{req.title}</h3>
-                                  <div className="space-y-1 text-sm text-slate-400 mb-4"><div className="flex items-center gap-2"><CalendarIcon size={14}/> {req.date} 반영</div><div className="flex items-center gap-2"><User size={14}/> {req.requester} {req.team && `(${req.team})`}</div></div>
-                                  <div className="pt-4 border-t border-[#2e3038] flex justify-between items-center text-xs text-slate-500"><span>변경사항 {req.changes.length}건</span><span className="flex items-center gap-1 group-hover:text-white transition-colors">상세보기 <ArrowRight size={12}/></span></div>
-                                  {req.menuPath && <div className="mt-2 text-[9px] text-slate-600 bg-slate-800 px-2 py-0.5 rounded w-fit">{req.menuPath}</div>}
-                              </div>
-                          ))}
-                       </div>
-                   )}
-                </div>
-            )}
+                  )}
+                  {modalState.type === 'EDIT_TAB_NAME' && (
+                    <div className="space-y-4">
+                        <div><label className="block text-xs font-bold text-slate-500 mb-1">탭 이름</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={editTabNameData.name} onChange={e => setEditTabNameData({...editTabNameData, name: e.target.value})} autoFocus/></div>
+                        <div className="flex justify-end pt-2"><button onClick={saveTabName} className="px-4 py-2 bg-[#7387ff] hover:bg-[#5b6dbf] rounded text-white text-xs font-bold">저장</button></div>
+                    </div>
+                  )}
+                  {modalState.type === 'EDIT_BANNER' && (
+                    <div className="space-y-4">
+                      {editBannerData.blockId && blocks.find(b => b.id === editBannerData.blockId)?.type === 'BIG_BANNER' && (
+                        <><div><label className="block text-xs font-bold text-slate-500 mb-1">타이틀</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500" value={editBannerData.title} onChange={e => setEditBannerData({...editBannerData, title: e.target.value})} /></div><div><label className="block text-xs font-bold text-slate-500 mb-1">설명</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500" value={editBannerData.desc} onChange={e => setEditBannerData({...editBannerData, desc: e.target.value})} /></div></>
+                      )}
+                      <div><label className="block text-xs font-bold text-slate-500 mb-1">배너명</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500" value={editBannerData.title} onChange={e => setEditBannerData({...editBannerData, title: e.target.value})} /></div>
+                      <div className="flex gap-2 items-end"><div className="flex-1"><label className="block text-xs font-bold text-slate-500 mb-1">이미지 URL</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500" value={editBannerData.img} onChange={e => setEditBannerData({...editBannerData, img: e.target.value})} /></div><label className="cursor-pointer p-2 bg-[#2e3038] hover:bg-[#3e404b] rounded mb-0.5 border border-slate-600"><Upload size={16} className="text-slate-400"/><input type="file" className="hidden" accept="image/*" onChange={(e) => { const file = e.target.files[0]; if(file) setEditBannerData({...editBannerData, img: URL.createObjectURL(file)}); }} /></label></div>
+                      <div><label className="block text-xs font-bold text-slate-500 mb-1">이벤트 ID</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500" value={editBannerData.eventId} onChange={e => setEditBannerData({...editBannerData, eventId: e.target.value})} /></div>
+                      <div className="grid grid-cols-2 gap-4"><div><label className="block text-xs font-bold text-slate-500 mb-1">랜딩 유형</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500" value={editBannerData.landingType} onChange={e => setEditBannerData({...editBannerData, landingType: e.target.value})} /></div><div><label className="block text-xs font-bold text-slate-500 mb-1">랜딩 값</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white font-mono outline-none focus:border-orange-500" value={editBannerData.landingValue} onChange={e => setEditBannerData({...editBannerData, landingValue: e.target.value})} /></div></div>
+                      <div><label className="block text-xs font-bold text-slate-500 mb-1">Jira 링크</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500" value={editBannerData.jiraLink} onChange={e => setEditBannerData({...editBannerData, jiraLink: e.target.value})} /></div>
+                      <div className="border-t border-[#2e3038] pt-3"><label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-300 mb-2"><input type="checkbox" checked={editBannerData.isTarget} onChange={e => setEditBannerData({...editBannerData, isTarget: e.target.checked})} className="accent-pink-500" /> 타겟 설정</label>{editBannerData.isTarget && <div><label className="block text-xs font-bold text-slate-500 mb-1">Filter Seg 값</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-pink-500 outline-none" value={editBannerData.targetSeg} onChange={e => setEditBannerData({...editBannerData, targetSeg: e.target.value})} /></div>}</div>
+                      <div><label className="block text-xs font-bold text-slate-500 mb-1">비고</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500" value={editBannerData.remarks} onChange={e => setEditBannerData({...editBannerData, remarks: e.target.value})} /></div>
+                    </div>
+                  )}
+                  {modalState.type === 'EDIT_CONTENT' && (
+                    <div className="space-y-4">
+                        <div><label className="block text-xs font-bold text-slate-500 mb-1">콘텐츠명</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-slate-500" value={editContentData.title} onChange={e => setEditContentData({...editContentData, title: e.target.value})} /></div>
+                        <div><label className="block text-xs font-bold text-slate-500 mb-1">시리즈 ID</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-slate-500 font-mono" value={editContentData.seriesId} onChange={e => setEditContentData({...editContentData, seriesId: e.target.value})} /></div>
+                        <div className="flex gap-2 items-end"><div className="flex-1"><label className="block text-xs font-bold text-slate-500 mb-1">이미지 URL</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-slate-500" value={editContentData.img} onChange={e => setEditContentData({...editContentData, img: e.target.value})} /></div><label className="cursor-pointer p-2 bg-[#2e3038] hover:bg-[#3e404b] rounded mb-0.5 border border-slate-600"><Upload size={16} className="text-slate-400"/><input type="file" className="hidden" accept="image/*" onChange={(e) => { const file = e.target.files[0]; if(file) setEditContentData({...editContentData, img: URL.createObjectURL(file)}); }} /></label></div>
+                        <div className="flex justify-end pt-2"><button onClick={saveEditedContent} className="px-4 py-2 bg-[#7387ff] hover:bg-[#5b6dbf] rounded text-white text-xs font-bold">저장</button></div>
+                    </div>
+                  )}
+                  {modalState.type === 'DELETE_BANNER_CONFIRM' && (<div className="text-center p-4"><AlertTriangle className="mx-auto text-red-500 mb-2" size={32} /><p className="text-white font-bold mb-1">배너를 삭제하시겠습니까?</p><p className="text-xs text-slate-400">삭제 후에는 복구할 수 없습니다.</p></div>)}
+                  {modalState.type === 'SAVE' && (<div className="space-y-4"><div><label className="block text-xs font-bold text-slate-500 mb-1">요청 제목</label><input type="text" value={requestTitle} onChange={e => setRequestTitle(e.target.value)} className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white"/></div>{diffSummary.length > 0 && <div className="bg-[#100d1d] p-2 rounded max-h-32 overflow-y-auto">{diffSummary.map((d,i)=><div key={i} className="text-xs text-slate-400">• {d.desc}</div>)}</div>}</div>)}
+                  {modalState.type === 'APPROVE' && (
+                    <div className="text-center">
+                        <div className="w-12 h-12 bg-[#7387ff]/20 text-[#7387ff] rounded-full flex items-center justify-center mx-auto mb-4"><CheckCircle size={24}/></div>
+                        <h4 className="text-lg font-bold text-white mb-2">승인하시겠습니까?</h4>
+                        <p className="text-sm text-slate-400 mb-4">
+                            '{modalState.data?.title}' 요청을 승인합니다.<br/>
+                            승인 시 현재 에디터 내용이 요청된 내용으로 변경됩니다.
+                        </p>
+                    </div>
+                  )}
+                  {['DELETE_BLOCK', 'DELETE_REQUEST', 'RESET'].includes(modalState.type) && <p className="text-slate-300 text-sm">작업을 계속 진행하시겠습니까?</p>}
+              </div>
+              <div className="p-4 bg-[#161820] flex justify-end gap-2 border-t border-[#2e3038] shrink-0">
+                {modalState.type === 'EDIT_BANNER' && <button onClick={confirmDeleteBanner} className="mr-auto px-4 py-2 rounded text-red-400 text-xs font-bold hover:bg-red-900/20 border border-red-900/50">삭제</button>}
+                {modalState.type !== 'EDIT_TAB_NAME' && modalState.type !== 'EDIT_CONTENT' && modalState.type !== 'ADD_GNB' && modalState.type !== 'ADD_SUBMENU' && modalState.type !== 'HISTORY_SELECT' && <button onClick={() => setModalState({ ...modalState, isOpen: false })} className="px-4 py-2 rounded text-slate-400 text-xs font-bold hover:bg-[#2e3038]">취소</button>}
+                {modalState.type !== 'EDIT_TAB_NAME' && modalState.type !== 'EDIT_CONTENT' && modalState.type !== 'HISTORY_SELECT' && <button onClick={modalState.type === 'NEW_REQUEST' ? handleCreateRequest : modalState.type === 'ADD_BLOCK' ? confirmAddBlock : modalState.type === 'EDIT_ID' ? saveEditedId : modalState.type === 'EDIT_BANNER' ? saveEditedBanner : modalState.type === 'ADD_GNB' || modalState.type === 'ADD_SUBMENU' ? handleAddMenu : handleConfirmAction} className={`px-6 py-2 rounded text-white text-xs font-bold shadow-lg ${modalState.type === 'DELETE_BANNER_CONFIRM' ? 'bg-red-600 hover:bg-red-500' : modalState.type === 'EDIT_BANNER' || (modalState.type === 'ADD_BLOCK' && blockCategory === 'BANNER') ? 'bg-orange-600 hover:bg-orange-500' : 'bg-[#7387ff] hover:bg-[#5b6dbf]'}`}>{modalState.type === 'DELETE_BANNER_CONFIRM' ? '삭제 확인' : '확인'}</button>}
+                {modalState.type === 'HISTORY_SELECT' && <button onClick={() => setModalState({ ...modalState, isOpen: false })} className="px-4 py-2 rounded text-slate-400 text-xs font-bold hover:bg-[#2e3038]">닫기</button>}
+              </div>
+            </div>
           </div>
         )}
       </main>
