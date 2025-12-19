@@ -6,7 +6,7 @@ import {
   Inbox, User, ExternalLink, RotateCcw, Calendar as CalendarIcon, Clock, ChevronLeft, Tv, Film, PlayCircle, BookOpen, MessageSquare, Ban,
   Eye, EyeOff, Database, Layers, Hash, Edit3, AlertTriangle, Link, MousePointer, Image as ImageIcon,
   MousePointerClick, Image, Tag, PlusCircle, MoreHorizontal, GripHorizontal, Target, StickyNote, Settings, Upload, Link2, Box, Filter,
-  Menu, History, Rewind, MoreVertical, Minus, Users
+  Menu, History, Rewind, MoreVertical, Minus, Users, Check, XCircle
 } from 'lucide-react';
 
 // ==========================================
@@ -1049,20 +1049,30 @@ export default function App() {
         }
     }
     else if (type === 'APPROVE') { 
+        const targetReqId = data.id;
         if (USE_MOCK_DATA) { 
-            const targetReqId = data.id;
-            setRequests(prev => prev.map(r => r.id === targetReqId ? { ...r, status: 'APPROVED' } : r));
+            // 1. 요청 목록에서 제거 (Inbox) 및 전체 내역 업데이트 (History)
+            setRequests(prev => prev.filter(r => r.id !== targetReqId));
             setSavedRequests(prev => prev.map(r => r.id === targetReqId ? { ...r, status: 'APPROVED' } : r));
-            if (data.snapshot) { setBlocks(JSON.parse(JSON.stringify(data.snapshot))); setOriginalBlocks(JSON.parse(JSON.stringify(data.snapshot))); }
-            if (viewRequest && viewRequest.id === targetReqId) setViewRequest({ ...viewRequest, status: 'APPROVED' });
-            alert('(Mock) 반영되었습니다! (로컬 상태 업데이트)'); 
+            
+            // 2. 에디터 블록에 스냅샷 반영 (승인된 내용으로 덮어쓰기)
+            if (data.snapshot) { 
+                const newSnapshot = JSON.parse(JSON.stringify(data.snapshot));
+                setBlocks(newSnapshot); 
+                setOriginalBlocks(JSON.parse(JSON.stringify(newSnapshot))); 
+            }
+            alert(`요청('${data.title}')이 승인 및 반영되었습니다.`);
         } 
         else {
             if (!supabase) return;
             await supabase.from('blocks').delete().eq('gnb_id', currentMenuId);
             const newBlocksData = data.snapshot.map((b, idx) => ({ gnb_id: currentMenuId, type: b.type, title: b.title, block_id_code: b.blockId, show_title: b.show_title, sort_order: idx, content: { items: b.items, banners: b.banners, tabs: b.tabs, leadingBanners: b.leadingBanners, showPreview: b.showPreview, contentId: b.contentId, contentIdType: b.contentIdType, isTarget: b.isTarget, targetSeg: b.targetSeg, remarks: b.remarks } }));
             const { error } = await supabase.from('blocks').insert(newBlocksData);
-            if(!error) { await supabase.from('requests').update({ status: 'APPROVED' }).eq('id', data.id); alert('반영되었습니다!'); window.location.reload(); }
+            if(!error) { 
+                await supabase.from('requests').update({ status: 'APPROVED' }).eq('id', data.id); 
+                alert('반영되었습니다!'); 
+                window.location.reload(); 
+            }
         }
     }
     else if (type === 'DELETE_BANNER_CONFIRM') { handleDeleteBanner(); return; }
@@ -1253,6 +1263,80 @@ export default function App() {
           </div>
         )}
 
+        {/* UNA (REQUEST HISTORY) VIEW */}
+        {viewMode === 'REQUEST' && (
+            <div className="flex-1 overflow-y-auto p-6 bg-[#100d1d]">
+                <div className="max-w-5xl mx-auto">
+                    <div className="mb-6 flex items-center justify-between">
+                        <h2 className="text-xl font-bold text-white flex items-center gap-2"><Inbox className="text-[#7387ff]"/> UNA (편성 요청 내역)</h2>
+                        <div className="flex items-center gap-2">
+                            <span className="text-slate-500 text-xs">메뉴 필터:</span>
+                            <select className="bg-[#191b23] border border-[#2e3038] rounded px-3 py-1.5 text-xs text-slate-300 outline-none" value={unaFilter} onChange={(e) => setUnaFilter(e.target.value)}>
+                                <option value="ALL">전체</option>
+                                {gnbList.map(g => <option key={g.id} value={g.name}>{g.name}</option>)}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        {filteredSavedRequests.length === 0 ? (
+                            <div className="text-center py-20 text-slate-500 border border-dashed border-[#2e3038] rounded-lg">요청 내역이 없습니다.</div>
+                        ) : (
+                            filteredSavedRequests.map(req => (
+                                <div key={req.id} className={`bg-[#191b23] border border-[#2e3038] rounded-lg p-5 transition-all hover:border-[#7387ff]/50 flex gap-4 ${req.status === 'APPROVED' ? 'opacity-70' : ''}`}>
+                                    {/* Status Icon */}
+                                    <div className="flex flex-col items-center pt-1 gap-2 min-w-[60px]">
+                                        {req.status === 'PENDING' ? <div className="w-10 h-10 rounded-full bg-yellow-500/20 text-yellow-500 flex items-center justify-center"><Clock size={20}/></div>
+                                        : req.status === 'APPROVED' ? <div className="w-10 h-10 rounded-full bg-green-500/20 text-green-500 flex items-center justify-center"><Check size={20}/></div>
+                                        : <div className="w-10 h-10 rounded-full bg-red-500/20 text-red-500 flex items-center justify-center"><XCircle size={20}/></div>}
+                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${req.status === 'PENDING' ? 'bg-yellow-900/30 text-yellow-500' : req.status === 'APPROVED' ? 'bg-green-900/30 text-green-500' : 'bg-red-900/30 text-red-500'}`}>{req.status}</span>
+                                    </div>
+
+                                    {/* Content */}
+                                    <div className="flex-1">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <div>
+                                                <h3 className="text-lg font-bold text-slate-200 mb-1">{req.title}</h3>
+                                                <div className="flex items-center gap-3 text-xs text-slate-400">
+                                                    <span className="flex items-center gap-1"><User size={12}/> {req.requester} ({req.team})</span>
+                                                    <span className="flex items-center gap-1"><CalendarIcon size={12}/> {req.createdAt}</span>
+                                                    <span className="flex items-center gap-1 px-2 py-0.5 bg-[#2e3038] rounded text-slate-300">{req.gnb}</span>
+                                                </div>
+                                            </div>
+                                            {/* Action Buttons for Pending Requests */}
+                                            {req.status === 'PENDING' && (
+                                                <div className="flex gap-2">
+                                                    <button onClick={() => handleRejectRequest(req.id)} className="px-3 py-1.5 border border-red-500/30 text-red-400 hover:bg-red-500/10 rounded text-xs font-bold transition-colors">반려</button>
+                                                    <button onClick={() => reqApprove(req)} className="px-4 py-1.5 bg-[#7387ff] hover:bg-[#5b6dbf] text-white rounded text-xs font-bold transition-colors shadow-lg shadow-[#7387ff]/20">승인</button>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="bg-[#100d1d] rounded p-3 text-xs text-slate-400 mb-3 border border-[#2e3038]">
+                                            <p className="mb-1"><span className="text-slate-500 font-bold mr-2">요청 내용:</span> {req.desc}</p>
+                                            {req.remarks && <p><span className="text-slate-500 font-bold mr-2">비고:</span> {req.remarks}</p>}
+                                        </div>
+
+                                        {/* Changes Summary */}
+                                        {req.changes && req.changes.length > 0 && (
+                                            <div className="space-y-1">
+                                                {req.changes.map((change, idx) => (
+                                                    <div key={idx} className="flex items-center gap-2 text-xs">
+                                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${change.type === '신규' ? 'bg-blue-500/20 text-blue-400' : 'bg-orange-500/20 text-orange-400'}`}>{change.type}</span>
+                                                        <span className="text-slate-300">{change.desc}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            </div>
+        )}
+
         {/* Modal */}
         {modalState.isOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
@@ -1388,7 +1472,17 @@ export default function App() {
                   )}
                   {modalState.type === 'DELETE_BANNER_CONFIRM' && (<div className="text-center p-4"><AlertTriangle className="mx-auto text-red-500 mb-2" size={32} /><p className="text-white font-bold mb-1">배너를 삭제하시겠습니까?</p><p className="text-xs text-slate-400">삭제 후에는 복구할 수 없습니다.</p></div>)}
                   {modalState.type === 'SAVE' && (<div className="space-y-4"><div><label className="block text-xs font-bold text-slate-500 mb-1">요청 제목</label><input type="text" value={requestTitle} onChange={e => setRequestTitle(e.target.value)} className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white"/></div>{diffSummary.length > 0 && <div className="bg-[#100d1d] p-2 rounded max-h-32 overflow-y-auto">{diffSummary.map((d,i)=><div key={i} className="text-xs text-slate-400">• {d.desc}</div>)}</div>}</div>)}
-                  {['APPROVE', 'DELETE_BLOCK', 'DELETE_REQUEST', 'RESET'].includes(modalState.type) && <p className="text-slate-300 text-sm">작업을 계속 진행하시겠습니까?</p>}
+                  {modalState.type === 'APPROVE' && (
+                    <div className="text-center">
+                        <div className="w-12 h-12 bg-[#7387ff]/20 text-[#7387ff] rounded-full flex items-center justify-center mx-auto mb-4"><CheckCircle size={24}/></div>
+                        <h4 className="text-lg font-bold text-white mb-2">승인하시겠습니까?</h4>
+                        <p className="text-sm text-slate-400 mb-4">
+                            '{modalState.data?.title}' 요청을 승인합니다.<br/>
+                            승인 시 현재 에디터 내용이 요청된 내용으로 변경됩니다.
+                        </p>
+                    </div>
+                  )}
+                  {['DELETE_BLOCK', 'DELETE_REQUEST', 'RESET'].includes(modalState.type) && <p className="text-slate-300 text-sm">작업을 계속 진행하시겠습니까?</p>}
               </div>
               <div className="p-4 bg-[#161820] flex justify-end gap-2 border-t border-[#2e3038] shrink-0">
                 {modalState.type === 'EDIT_BANNER' && <button onClick={confirmDeleteBanner} className="mr-auto px-4 py-2 rounded text-red-400 text-xs font-bold hover:bg-red-900/20 border border-red-900/50">삭제</button>}
