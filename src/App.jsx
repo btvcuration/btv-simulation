@@ -1217,14 +1217,33 @@ export default function App() {
   };
 
   const handleConfirmAction = async () => {
+    // [Helper] 메뉴 이름으로 ID를 찾는 재귀 함수 (handleConfirmAction 내부 또는 컴포넌트 내부에 정의)
+  const findGnbIdByName = (list, name) => {
+      for (const item of list) {
+          if (item.name === name) return item.id;
+          if (item.children && item.children.length > 0) {
+              const childId = findGnbIdByName(item.children, name);
+              if (childId) return childId;
+          }
+      }
+      return null;
+  };
+
+  const handleConfirmAction = async () => {
     const { type, data } = modalState;
-    if (type === 'DELETE_BLOCK') setBlocks(prev => prev.filter(b => b.id !== data));
+
+    if (type === 'DELETE_BLOCK') {
+        setBlocks(prev => prev.filter(b => b.id !== data));
+    } 
     else if (type === 'DELETE_REQUEST') { 
         if (!USE_MOCK_DATA && supabase) await supabase.from('requests').delete().eq('id', data);
         setRequests(prev => prev.filter(r => r.id !== data)); 
         if (viewRequest?.id === data) setViewRequest(null); 
     }
-    else if (type === 'RESET') { setBlocks(JSON.parse(JSON.stringify(originalBlocks))); setRequests([]); }
+    else if (type === 'RESET') { 
+        setBlocks(JSON.parse(JSON.stringify(originalBlocks))); 
+        setRequests([]); 
+    }
     else if (type === 'SAVE') { 
         if (USE_MOCK_DATA) {
             alert('(Mock) 저장 완료 흉내');
@@ -1239,29 +1258,78 @@ export default function App() {
     }
     else if (type === 'APPROVE') { 
         const targetReqId = data.id;
+        // [핵심 수정] 현재 보고 있는 메뉴(currentMenuId)가 아니라, 요청서에 적힌 메뉴(data.gnb)의 ID를 찾아야 함
+        const targetGnbName = data.gnb; // fetchRequests에서 gnb_target을 gnb로 매핑해둠
+        const targetGnbId = findGnbIdByName(gnbList, targetGnbName);
+
+        if (!targetGnbId) {
+            alert(`오류: 요청된 메뉴 '${targetGnbName}'를 찾을 수 없습니다.\n이미 삭제된 메뉴일 수 있습니다.`);
+            setModalState({ isOpen: false, type: null, data: null });
+            return;
+        }
+
         if (USE_MOCK_DATA) { 
             setRequests(prev => prev.map(r => r.id === targetReqId ? { ...r, status: 'APPROVED' } : r));
             
-            if (data.snapshot) { 
+            // 만약 현재 보고 있는 메뉴와 타겟 메뉴가 같다면 화면도 즉시 갱신
+            if (currentMenuId === targetGnbId && data.snapshot) { 
                 const newSnapshot = JSON.parse(JSON.stringify(data.snapshot));
                 setBlocks(newSnapshot); 
                 setOriginalBlocks(JSON.parse(JSON.stringify(newSnapshot))); 
             }
-            alert(`편성이 반영(배포)되었습니다.`);
+            alert(`'${targetGnbName}' 메뉴에 편성이 반영(배포)되었습니다.`);
         } 
         else {
             if (!supabase) return;
-            await supabase.from('blocks').delete().eq('gnb_id', currentMenuId);
-            const newBlocksData = data.snapshot.map((b, idx) => ({ gnb_id: currentMenuId, type: b.type, title: b.title, block_id_code: b.blockId, show_title: b.show_title, sort_order: idx, content: { items: b.items, banners: b.banners, tabs: b.tabs, leadingBanners: b.leadingBanners, showPreview: b.showPreview, contentId: b.contentId, contentIdType: b.contentIdType, isTarget: b.isTarget, targetSeg: b.targetSeg, remarks: b.remarks } }));
+            
+            // [핵심 수정] currentMenuId -> targetGnbId로 변경
+            // 1. 해당 메뉴의 기존 블록 삭제
+            await supabase.from('blocks').delete().eq('gnb_id', targetGnbId);
+            
+            // 2. 해당 메뉴에 새 블록 Insert
+            const newBlocksData = data.snapshot.map((b, idx) => ({ 
+                gnb_id: targetGnbId, // <-- 여기가 수정됨
+                type: b.type, 
+                title: b.title, 
+                block_id_code: b.blockId, 
+                show_title: b.show_title, 
+                sort_order: idx, 
+                content: { 
+                    items: b.items, 
+                    banners: b.banners, 
+                    tabs: b.tabs, 
+                    leadingBanners: b.leadingBanners, 
+                    showPreview: b.showPreview, 
+                    contentId: b.contentId, 
+                    contentIdType: b.contentIdType, 
+                    isTarget: b.isTarget, 
+                    targetSeg: b.targetSeg, 
+                    remarks: b.remarks 
+                } 
+            }));
+            
             const { error } = await supabase.from('blocks').insert(newBlocksData);
+            
             if(!error) { 
                 await supabase.from('requests').update({ status: 'APPROVED' }).eq('id', data.id); 
-                alert('편성이 반영(배포)되었습니다!'); 
-                window.location.reload(); 
+                
+                // 현재 보고 있는 메뉴와 같다면 리로드, 아니면 알림만
+                if (currentMenuId === targetGnbId) {
+                    alert('편성이 반영(배포)되었습니다!'); 
+                    window.location.reload(); 
+                } else {
+                    alert(`'${targetGnbName}' 메뉴에 편성이 정상적으로 반영되었습니다.`);
+                    // 요청 목록 상태 업데이트 (리로드 없이)
+                    setRequests(prev => prev.map(r => r.id === data.id ? { ...r, status: 'APPROVED' } : r));
+                }
+            } else {
+                console.error(error);
+                alert('반영 실패: ' + error.message);
             }
         }
     }
     else if (type === 'DELETE_BANNER_CONFIRM') { handleDeleteBanner(); return; }
+    
     setModalState({ isOpen: false, type: null, data: null });
   };
   
