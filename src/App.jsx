@@ -1089,6 +1089,11 @@ export default function App() {
           requestType = 'BIG_BANNER'; 
           finalRemarks = `[Today B tv] ${finalRemarks || ''}`;
       }
+    
+      let finalDescription = newRequestData.desc;
+      if (finalRemarks) {
+          finalDescription += `\n\n[비고] ${finalRemarks}`;
+      }
 
       if (USE_MOCK_DATA) { 
           alert('(Mock) 요청이 등록되었습니다. (실제 DB 저장 X)'); 
@@ -1105,11 +1110,9 @@ export default function App() {
           team: newRequestData.team, 
           title: newRequestData.headline, 
           gnb_target: newRequestData.gnb, 
-          description: newRequestData.desc, 
+          description: finalDescription,
           location: newRequestData.location, 
-          // [수정] remarks 필드 제거 (오류 해결)
           // remarks: finalRemarks, 
-          // [수정] jira_link 필드 제거 (DB 컬럼 없음)
           status: 'PENDING',
           // [수정] type 컬럼 주석 해제 (DB insert 시 필요)
           type: requestType, 
