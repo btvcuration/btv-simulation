@@ -310,88 +310,95 @@ const useBtvData = (supabase, viewMode) => {
 
     const addGnb = async (name) => {
         const slug = generateSlug(name);
-        if (USE_MOCK_DATA) {
-            const newGnb = { id: `gnb-${Date.now()}`, name, slug, children: [] };
-            setGnbList([...gnbList, newGnb]);
-        } else {
-            const { data, error } = await supabase.from('gnb_menus').insert({ name, slug, sort_order: gnbList.length }).select();
-            if(data) fetchGnb();
-            else console.error("GNB Add Error:", error);
+        const newGnb = { id: `gnb-${Date.now()}`, name, slug, children: [] };
+        
+        // Optimistic UI: 즉시 반영
+        setGnbList(prev => [...prev, newGnb]);
+
+        if (!USE_MOCK_DATA) {
+            const { error } = await supabase.from('gnb_menus').insert({ name, slug, sort_order: gnbList.length });
+            if(error) {
+                console.error("GNB Add Error:", error);
+                // 에러 시 롤백 로직이 필요하지만, 여기서는 생략
+                fetchGnb(); 
+            } else {
+                fetchGnb(); // ID 동기화를 위해 재조회
+            }
         }
     };
 
     const addSubMenu = async (parentId, name) => {
         const slug = generateSlug(name);
-        if (USE_MOCK_DATA) {
-            setGnbList(gnbList.map(item => {
-                if (item.id === parentId) {
-                    return { ...item, children: [...(item.children || []), { id: `sub-${Date.now()}`, name, slug }] };
-                }
-                return item;
-            }));
-            if (!expandedMenuIds.includes(parentId)) setExpandedMenuIds([...expandedMenuIds, parentId]);
-        } else {
+        // Optimistic UI: 즉시 반영
+        setGnbList(prev => prev.map(item => {
+            if (item.id === parentId) {
+                return { ...item, children: [...(item.children || []), { id: `sub-${Date.now()}`, name, slug }] };
+            }
+            return item;
+        }));
+        if (!expandedMenuIds.includes(parentId)) setExpandedMenuIds([...expandedMenuIds, parentId]);
+
+        if (!USE_MOCK_DATA) {
             const parent = gnbList.find(g => g.id === parentId);
             const sortOrder = parent ? parent.children.length : 0;
-            const { data, error } = await supabase.from('gnb_menus').insert({ name, slug, parent_id: parentId, sort_order: sortOrder }).select();
-            if(data) {
-                fetchGnb(); 
-                if (!expandedMenuIds.includes(parentId)) setExpandedMenuIds([...expandedMenuIds, parentId]);
-            } else console.error("Submenu Add Error:", error);
+            const { error } = await supabase.from('gnb_menus').insert({ name, slug, parent_id: parentId, sort_order: sortOrder });
+            if(error) console.error("Submenu Add Error:", error);
+            else fetchGnb();
         }
     };
 
     const reorderMenu = async (dragId, dropId, type) => {
-        if (USE_MOCK_DATA) {
-            const newList = JSON.parse(JSON.stringify(gnbList));
-            if (type === 'GNB') {
-                const dragIndex = newList.findIndex(i => i.id === dragId);
-                const dropIndex = newList.findIndex(i => i.id === dropId);
-                const [dragItem] = newList.splice(dragIndex, 1);
-                newList.splice(dropIndex, 0, dragItem);
-                setGnbList(newList);
-            } else {
-                for (let gnb of newList) {
-                    const dragIndex = gnb.children.findIndex(c => c.id === dragId);
-                    const dropIndex = gnb.children.findIndex(c => c.id === dropId);
-                    if (dragIndex > -1 && dropIndex > -1) {
-                        const [dragItem] = gnb.children.splice(dragIndex, 1);
-                        gnb.children.splice(dropIndex, 0, dragItem);
-                        break;
-                    }
-                }
-                setGnbList(newList);
-            }
+        // Optimistic UI: 즉시 반영 (공통 로직)
+        const newList = JSON.parse(JSON.stringify(gnbList));
+        if (type === 'GNB') {
+            const dragIndex = newList.findIndex(i => i.id === dragId);
+            const dropIndex = newList.findIndex(i => i.id === dropId);
+            const [dragItem] = newList.splice(dragIndex, 1);
+            newList.splice(dropIndex, 0, dragItem);
+            setGnbList(newList);
         } else {
-            // DB Reorder Logic placeholder
-            alert("상용 DB 모드에서는 순서 변경이 즉시 저장되지 않을 수 있습니다 (데모).");
+            for (let gnb of newList) {
+                const dragIndex = gnb.children.findIndex(c => c.id === dragId);
+                const dropIndex = gnb.children.findIndex(c => c.id === dropId);
+                if (dragIndex > -1 && dropIndex > -1) {
+                    const [dragItem] = gnb.children.splice(dragIndex, 1);
+                    gnb.children.splice(dropIndex, 0, dragItem);
+                    break;
+                }
+            }
+            setGnbList(newList);
+        }
+
+        if (!USE_MOCK_DATA) {
+            // DB Reorder Logic (실제 구현 필요)
+            // alert("상용 DB 모드에서는 순서 변경이 즉시 저장되지 않을 수 있습니다 (데모)."); // [수정] 알림 제거
         }
     }
 
     const deleteGnb = async (id) => {
-          if (USE_MOCK_DATA) {
-             setGnbList(gnbList.filter(item => item.id !== id));
-             if (currentMenuId === id) { setCurrentMenuId(null); setCurrentMenuPath(''); }
-          } else {
+          // Optimistic UI
+          setGnbList(prev => prev.filter(item => item.id !== id));
+          if (currentMenuId === id) { setCurrentMenuId(null); setCurrentMenuPath(''); }
+
+          if (!USE_MOCK_DATA) {
              await supabase.from('gnb_menus').delete().eq('id', id);
              fetchGnb();
-             if (currentMenuId === id) { setCurrentMenuId(null); setCurrentMenuPath(''); }
           }
     };
 
     const deleteSubMenu = async (parentId, childId) => {
-          if (USE_MOCK_DATA) {
-              setGnbList(gnbList.map(item => {
-                  if (item.id === parentId) {
-                      return { ...item, children: item.children.filter(c => c.id !== childId) };
-                  }
-                  return item;
-              }));
-              if (currentMenuId === childId) { setCurrentMenuId(parentId); }
-          } else {
+          // Optimistic UI
+          setGnbList(prev => prev.map(item => {
+              if (item.id === parentId) {
+                  return { ...item, children: item.children.filter(c => c.id !== childId) };
+              }
+              return item;
+          }));
+          if (currentMenuId === childId) { setCurrentMenuId(parentId); }
+
+          if (!USE_MOCK_DATA) {
               await supabase.from('gnb_menus').delete().eq('id', childId);
               fetchGnb();
-              if (currentMenuId === childId) { setCurrentMenuId(parentId); }
           }
     };
 
@@ -905,8 +912,6 @@ export default function App() {
   const [isDragEnabled, setIsDragEnabled] = useState(false);
   const [hoveredBlockIndex, setHoveredBlockIndex] = useState(null);
 
-  // [수정] 1. Requests 분리 (Promotion vs Publish)
-  // snapshot_new가 있으면 "편성 반영(Publish) 요청", 없으면 "프로모션(Promotion) 요청"으로 간주
   const inboxRequests = requests.filter(r => !r.snapshot || r.snapshot.length === 0).filter(req => inboxFilter === 'ALL' || req.gnb === inboxFilter).filter(r => r.status === 'PENDING');
   const unaRequests = requests.filter(r => r.snapshot && r.snapshot.length > 0).filter(req => unaFilter === 'ALL' || (req.menuPath && req.menuPath.includes(unaFilter)));
 
@@ -943,6 +948,8 @@ export default function App() {
        if(newBlockData.type === 'MENU_BLOCK') newBlock.showTitle = false;
      } else if (blockCategory === 'MULTI') {
        newBlock.type = 'MULTI'; newBlock.items = [{title:'추천1'}];
+     } else if (blockCategory === 'SPECIAL') {
+       newBlock.type = 'TODAY_BTV'; newBlock.items = [{ id: `t-item-${Date.now()}`, type: 'CONTENT', title: '대표 콘텐츠', img: '' }];
      } else {
        newBlock.type = newBlockData.type; newBlock.items = [{title:'콘텐츠1'}];
        if (newBlockData.type === 'TAB') newBlock.tabs = [{ id: 't1', name: '탭 1', items: [{title:'콘텐츠 1'}] }];
@@ -973,7 +980,6 @@ export default function App() {
   const handleCreateRequest = async () => { 
       if (!newRequestData.headline || !newRequestData.requester) return alert('요청자 및 제목을 입력해주세요.'); 
       
-      // [수정] 2. 프로모션 요청 생성 (Snapshot 없음)
       if (USE_MOCK_DATA) { 
           alert('(Mock) 요청이 등록되었습니다. (실제 DB 저장 X)'); 
           const mockNewReq = { id: `req-${Date.now()}`, requester: newRequestData.requester, team: newRequestData.team, title: newRequestData.headline, gnb: newRequestData.gnb, desc: newRequestData.desc, location: newRequestData.location, status: 'PENDING', type: newRequestData.type, remarks: newRequestData.remarks, jiraLink: newRequestData.jiraLink, snapshot_new: null }; 
@@ -1084,7 +1090,6 @@ export default function App() {
     }
     else if (type === 'RESET') { setBlocks(JSON.parse(JSON.stringify(originalBlocks))); setRequests([]); }
     else if (type === 'SAVE') { 
-        // [수정] 3. 편성 반영 요청 (Snapshot 포함)
         if (USE_MOCK_DATA) {
             alert('(Mock) 저장 완료 흉내');
             const newSavedReq = { id: `saved-${Date.now()}`, title: requestTitle, status: 'PENDING', createdAt: new Date().toISOString().split('T')[0], date: scheduleDate, requester: '관리자 (Mock)', changes: diffSummary, menuPath: currentMenuPath, originalSnapshot: JSON.parse(JSON.stringify(originalBlocks)), snapshot: JSON.parse(JSON.stringify(blocks)), snapshot_new: JSON.parse(JSON.stringify(blocks)) };
@@ -1097,13 +1102,10 @@ export default function App() {
         }
     }
     else if (type === 'APPROVE') { 
-        // [수정] 4. 편성 반영 완료 로직 (승인 -> 반영)
         const targetReqId = data.id;
         if (USE_MOCK_DATA) { 
-            // 1. 요청 목록 업데이트
             setRequests(prev => prev.map(r => r.id === targetReqId ? { ...r, status: 'APPROVED' } : r));
             
-            // 2. 에디터 블록에 스냅샷 반영
             if (data.snapshot) { 
                 const newSnapshot = JSON.parse(JSON.stringify(data.snapshot));
                 setBlocks(newSnapshot); 
@@ -1147,9 +1149,40 @@ export default function App() {
       e.preventDefault(); const str = e.dataTransfer.getData('requestData'); 
       if (str) { 
           const req = JSON.parse(str); 
+          
+          // [수정] 3. 빅배너 or Today B tv 배너 요청 시 기존 블록에 추가 로직
+          if (req.type === 'BIG_BANNER' || req.type === 'TODAY_BTV_BANNER') {
+              const targetType = req.type === 'BIG_BANNER' ? 'BIG_BANNER' : 'TODAY_BTV';
+              const targetBlockIndex = blocks.findIndex(b => b.type === targetType);
+              
+              if (targetBlockIndex === -1) {
+                  alert('배너를 추가할 대상 블록(빅배너 또는 Today B tv)이 없습니다.\n먼저 해당 블록을 생성해주세요.');
+                  return;
+              }
+
+              const newBlocks = [...blocks];
+              const targetBlock = { ...newBlocks[targetBlockIndex] };
+              
+              if (targetType === 'BIG_BANNER') {
+                  const newBanners = [...(targetBlock.banners || [])];
+                  newBanners.unshift({ id: `req-bn-${Date.now()}`, title: req.title, desc: req.desc, landingType: 'NONE', isNew: true });
+                  targetBlock.banners = newBanners;
+              } else {
+                  // TODAY_BTV
+                  const newItems = [...(targetBlock.items || [])];
+                  newItems.unshift({ id: `req-tb-${Date.now()}`, type: 'BANNER', title: req.title, isTarget: false, isNew: true });
+                  targetBlock.items = newItems;
+              }
+              
+              newBlocks[targetBlockIndex] = targetBlock;
+              setBlocks(newBlocks);
+              setRequests(prev => prev.filter(r => r.id !== req.id)); // 요청 목록에서 제거
+              return;
+          }
+
+          // 그 외 일반 블록 요청은 신규 블록 생성
           const newBlock = { id: `req-${Date.now()}`, title: req.title, isNew: true, contentId: 'REQ_ID', remarks: req.remarks, showTitle: true }; 
-          if (req.type === 'BIG_BANNER') { newBlock.type = 'BIG_BANNER'; newBlock.banners = [{ title: req.title, desc: req.desc, landingType: 'NONE' }]; } 
-          else if (['BAND_BANNER', 'LONG_BANNER', 'BANNER_1', 'BANNER_2', 'BANNER_3', 'MENU_BLOCK'].includes(req.type)) { newBlock.type = req.type; const bannerType = req.type === 'BANNER_1' ? '1-COL' : req.type === 'BANNER_2' ? '2-COL' : req.type === 'BANNER_3' ? '3-COL' : req.type === 'MENU_BLOCK' ? 'MENU' : undefined; newBlock.banners = [{ title: req.title, type: bannerType, landingType: 'NONE' }]; } 
+          if (['BAND_BANNER', 'LONG_BANNER', 'BANNER_1', 'BANNER_2', 'BANNER_3', 'MENU_BLOCK'].includes(req.type)) { newBlock.type = req.type; const bannerType = req.type === 'BANNER_1' ? '1-COL' : req.type === 'BANNER_2' ? '2-COL' : req.type === 'BANNER_3' ? '3-COL' : req.type === 'MENU_BLOCK' ? 'MENU' : undefined; newBlock.banners = [{ title: req.title, type: bannerType, landingType: 'NONE' }]; } 
           else if (req.type === 'MULTI') { newBlock.type = 'MULTI'; newBlock.items = [1,2,3,4].map(i => ({ id: `req-m-${i}`, title: '추천' })); } 
           else { newBlock.type = req.type || 'VERTICAL'; newBlock.contentIdType = 'RACE'; newBlock.items = [{id:'i1',title:'Content'}]; } 
           const _blocks = [...blocks]; _blocks.splice(dropIndex !== undefined ? dropIndex : _blocks.length, 0, newBlock); setBlocks(_blocks); setRequests(requests.filter(r => r.id !== req.id)); 
@@ -1416,7 +1449,7 @@ export default function App() {
                           <div><label className="block text-xs font-bold text-slate-500 mb-1">소속 팀</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newRequestData.team} onChange={e => setNewRequestData({...newRequestData, team: e.target.value})} placeholder="예: 편성1팀" /></div>
                       </div>
                       <div><label className="block text-xs font-bold text-slate-500 mb-1">제목</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newRequestData.headline} onChange={e => setNewRequestData({...newRequestData, headline: e.target.value})} placeholder="요청 제목 입력"/></div>
-                      <div><label className="block text-xs font-bold text-slate-500 mb-1">편성 유형</label><select className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newRequestData.type} onChange={e => setNewRequestData({...newRequestData, type: e.target.value})}><optgroup label="콘텐츠 블록"><option value="VERTICAL">세로 포스터</option><option value="HORIZONTAL">가로 포스터</option><option value="HORIZONTAL_MINI">미니 가로</option><option value="TAB">탭 블록</option><option value="MULTI">멀티 블록</option></optgroup><optgroup label="배너"><option value="BIG_BANNER">빅배너</option><option value="BAND_BANNER">띠배너</option><option value="LONG_BANNER">롱배너</option><option value="BANNER_1">1단 배너</option><option value="BANNER_2">2단 배너</option><option value="BANNER_3">3단 배너</option></optgroup></select></div>
+                      <div><label className="block text-xs font-bold text-slate-500 mb-1">편성 유형</label><select className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newRequestData.type} onChange={e => setNewRequestData({...newRequestData, type: e.target.value})}><optgroup label="배너"><option value="BIG_BANNER">빅배너</option><option value="TODAY_BTV_BANNER">Today B tv 배너</option><option value="BAND_BANNER">띠배너</option><option value="LONG_BANNER">롱배너</option><option value="BANNER_1">1단 배너</option><option value="BANNER_2">2단 배너</option><option value="BANNER_3">3단 배너</option></optgroup></select></div>
                       <div><label className="block text-xs font-bold text-slate-500 mb-1">편성 요청 위치</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newRequestData.location} onChange={e => setNewRequestData({...newRequestData, location: e.target.value})} placeholder="예: TV 방송 홈 상단"/></div>
                       <div><label className="block text-xs font-bold text-slate-500 mb-1">상세 내용</label><textarea className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none h-20" value={newRequestData.desc} onChange={e => setNewRequestData({...newRequestData, desc: e.target.value})} placeholder="요청 상세 내용 입력"/></div>
                       <div><label className="block text-xs font-bold text-slate-500 mb-1">비고</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newRequestData.remarks} onChange={e => setNewRequestData({...newRequestData, remarks: e.target.value})} placeholder="특이사항 입력"/></div>
@@ -1426,7 +1459,7 @@ export default function App() {
                   {modalState.type === 'ADD_BLOCK' && (
                     <div className="space-y-4">
                       <div><label className="block text-xs font-bold text-slate-500 mb-1">블록 타이틀</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newBlockData.title} onChange={e => setNewBlockData({...newBlockData, title: e.target.value})} /></div>
-                      <div><label className="block text-xs font-bold text-slate-500 mb-2">블록 종류</label><select className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={blockCategory} onChange={(e) => setBlockCategory(e.target.value)}><option value="CONTENT">콘텐츠 블록</option><option value="BANNER">배너 블록</option><option value="MULTI">멀티 블록</option></select></div>
+                      <div><label className="block text-xs font-bold text-slate-500 mb-2">블록 종류</label><select className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={blockCategory} onChange={(e) => setBlockCategory(e.target.value)}><option value="CONTENT">콘텐츠 블록</option><option value="BANNER">배너 블록</option><option value="MULTI">멀티 블록</option><option value="SPECIAL">스페셜 (Today B tv)</option></select></div>
                       {blockCategory === 'CONTENT' && (
                         <div className="space-y-4 pt-2 border-t border-[#2e3038]">
                            <div className="grid grid-cols-2 gap-4">
