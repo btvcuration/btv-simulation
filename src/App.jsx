@@ -119,23 +119,6 @@ const MOCK_BLOCKS = [
   }
 ];
 
-const MOCK_HISTORY_DATA = {
-    '2023-10-01': [
-        { id: 'h-oct1-1', type: 'TODAY_BTV', title: 'Today B tv (10/1)', items: [{ title: '10월의 시작' }] },
-        { id: 'h-oct1-2', type: 'VERTICAL', title: '10월 신작', items: [{ title: '영화 A' }] }
-    ],
-    '2023-10-15': [
-        { id: 'h-oct15-1', type: 'TODAY_BTV', title: 'Today B tv (10/15 변경)', items: [{ title: '가을 특선' }, { title: '단풍놀이' }] },
-        { id: 'h-oct15-2', type: 'VERTICAL', title: '10월 인기작', items: [{ title: '영화 B' }, { title: '영화 C' }] },
-        { id: 'h-oct15-3', type: 'BIG_BANNER', title: '중간 광고', banners: [{ title: '할인 이벤트' }] }
-    ],
-    '2023-10-25': [
-        { id: 'h-oct25-1', type: 'TODAY_BTV', title: 'Today B tv (10/25 변경)', items: [{ title: '할로윈 주간' }] },
-        { id: 'h-oct25-2', type: 'BIG_BANNER', title: '할로윈 특집', banners: [{ title: '공포 영화 50% 할인', desc: '무서운 영화 모음' }] },
-        { id: 'h-oct25-3', type: 'HORIZONTAL', title: '가족과 함께', items: [{ title: '코코' }, { title: '몬스터 주식회사' }] }
-    ]
-};
-
 const MOCK_REQUESTS = [
     { 
         id: 'r1', requester: '김편성', team: '편성1팀', title: '신규 영화 블록 추가 요청', desc: '이번 주 신작 영화 소개를 위한 블록 추가', type: 'VERTICAL', gnb: '홈', status: 'PENDING', location: '상단', remarks: '급함', createdAt: '2023-11-01', changes: [{type: '신규', desc: '신규 블록 추가됨'}],
@@ -153,6 +136,23 @@ const MOCK_REQUESTS = [
         snapshot: JSON.parse(JSON.stringify(MOCK_BLOCKS))
     }
 ];
+
+const MOCK_HISTORY_DATA = {
+    '2023-10-01': [
+        { id: 'h-oct1-1', type: 'TODAY_BTV', title: 'Today B tv (10/1)', items: [{ title: '10월의 시작' }] },
+        { id: 'h-oct1-2', type: 'VERTICAL', title: '10월 신작', items: [{ title: '영화 A' }] }
+    ],
+    '2023-10-15': [
+        { id: 'h-oct15-1', type: 'TODAY_BTV', title: 'Today B tv (10/15 변경)', items: [{ title: '가을 특선' }, { title: '단풍놀이' }] },
+        { id: 'h-oct15-2', type: 'VERTICAL', title: '10월 인기작', items: [{ title: '영화 B' }, { title: '영화 C' }] },
+        { id: 'h-oct15-3', type: 'BIG_BANNER', title: '중간 광고', banners: [{ title: '할인 이벤트' }] }
+    ],
+    '2023-10-25': [
+        { id: 'h-oct25-1', type: 'TODAY_BTV', title: 'Today B tv (10/25 변경)', items: [{ title: '할로윈 주간' }] },
+        { id: 'h-oct25-2', type: 'BIG_BANNER', title: '할로윈 특집', banners: [{ title: '공포 영화 50% 할인', desc: '무서운 영화 모음' }] },
+        { id: 'h-oct25-3', type: 'HORIZONTAL', title: '가족과 함께', items: [{ title: '코코' }, { title: '몬스터 주식회사' }] }
+    ]
+};
 
 // Helper to generate slug
 const generateSlug = (name) => {
@@ -267,15 +267,35 @@ const useBtvData = (supabase, viewMode) => {
                 .order('created_at', { ascending: false });
             
             if (data) {
-                const formattedRequests = data.map(r => ({
-                    id: r.id, title: r.title, requester: r.requester, team: r.team, gnb: r.gnb_target, type: r.snapshot_new ? 'PUBLISH' : 'VERTICAL', 
-                    desc: r.description, location: r.location, status: r.status, 
-                    date: new Date(r.created_at).toLocaleDateString(),
-                    createdAt: new Date(r.created_at).toLocaleString(),
-                    remarks: r.remarks, 
-                    jiraLink: r.jira_link,
-                    changes: [], snapshot: r.snapshot_new, originalSnapshot: r.snapshot_original, menuPath: r.gnb_target 
-                }));
+                // [수정] remarks에서 type 정보를 파싱하여 복원
+                const formattedRequests = data.map(r => {
+                    let type = r.snapshot_new ? 'PUBLISH' : 'VERTICAL'; // 기본값
+                    // remarks가 '[TYPE]' 형식으로 시작하면 해당 타입을 추출
+                    const match = r.remarks ? r.remarks.match(/^\[([A-Z_]+)\]/) : null;
+                    if (match) {
+                        type = match[1];
+                    }
+
+                    return {
+                        id: r.id, 
+                        title: r.title, 
+                        requester: r.requester, 
+                        team: r.team, 
+                        gnb: r.gnb_target, 
+                        type: type, 
+                        desc: r.description, 
+                        location: r.location, 
+                        status: r.status, 
+                        date: new Date(r.created_at).toLocaleDateString(),
+                        createdAt: new Date(r.created_at).toLocaleString(),
+                        remarks: r.remarks, 
+                        jiraLink: r.jira_link,
+                        changes: [], 
+                        snapshot: r.snapshot_new, 
+                        originalSnapshot: r.snapshot_original, 
+                        menuPath: r.gnb_target 
+                    };
+                });
                 setRequests(formattedRequests);
             }
         };
@@ -1051,13 +1071,18 @@ export default function App() {
       if (!newRequestData.headline || !newRequestData.requester) return alert('요청자 및 제목을 입력해주세요.'); 
       
       let requestType = newRequestData.type;
-      let finalRemarks = newRequestData.remarks;
+      let finalRemarks = newRequestData.remarks || '';
       
       // [수정] 요청 타입 치환 (DB 제약조건 회피 및 블록 타입 통일)
       if (requestType === 'TODAY_BTV_BANNER') {
           requestType = 'BIG_BANNER'; 
-          finalRemarks = `[Today B tv] ${finalRemarks || ''}`;
+          finalRemarks = `[Today B tv] ${finalRemarks}`;
+      } else {
+           // 다른 타입들도 구분을 위해 remarks에 타입 정보 추가
+           finalRemarks = `[${requestType}] ${finalRemarks}`;
       }
+      
+      finalRemarks = finalRemarks.trim();
 
       if (USE_MOCK_DATA) { 
           alert('(Mock) 요청이 등록되었습니다. (실제 DB 저장 X)'); 
@@ -1076,12 +1101,10 @@ export default function App() {
           gnb_target: newRequestData.gnb, 
           description: newRequestData.desc, 
           location: newRequestData.location, 
-          // [수정] remarks 필드 제거 (오류 해결)
-          // remarks: finalRemarks, 
+          remarks: finalRemarks,
           // [수정] jira_link 필드 제거 (DB 컬럼 없음)
           status: 'PENDING',
-          // [수정] type 컬럼 주석 해제 (DB insert 시 필요)
-          type: requestType, 
+          // [수정] type 컬럼 제거 (DB 컬럼 없음)
           snapshot_new: null, 
           snapshot_original: null
       }); 
