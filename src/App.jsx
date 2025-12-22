@@ -853,7 +853,7 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
                         {!isOriginal && !readOnly && <div className="absolute top-2 right-2 opacity-0 group-hover/long:opacity-50 text-white cursor-grab"><GripVertical size={14}/></div>}
                       </div>
                    ) : block.type === 'MENU_BLOCK' ? (
-                       <PosterItem type="VERTICAL" isBanner={true} isTarget={banner.isTarget} jiraLink={banner.jiraLink} bannerType="MENU" text={banner.title} img={banner.img} onClick={(e) => handleBannerClick(e, banner, idx)} draggable={!isOriginal && !readOnly} onDragStart={(e) => onBannerDragStart(e, idx, 'BANNER')} onDragEnter={(e) => onBannerDragEnter(e, idx)} onDrop={(e) => onBannerDrop(e, 'BANNER')} />
+                       <PosterItem type="VERTICAL" isBanner={true} isTarget={banner.isTarget} jiraLink={banner.jiraLink} bannerType={banner.type} text={banner.title} img={banner.img} onClick={(e) => handleBannerClick(e, banner, idx)} draggable={!isOriginal && !readOnly} onDragStart={(e) => onBannerDragStart(e, idx, 'BANNER')} onDragEnter={(e) => onBannerDragEnter(e, idx)} onDrop={(e) => onBannerDrop(e, 'BANNER')} />
                    ) : (
                       <PosterItem type="VERTICAL" isBanner={true} isTarget={banner.isTarget} jiraLink={banner.jiraLink} bannerType={banner.type || (block.type === 'BANNER_1' ? '1-COL' : block.type === 'BANNER_2' ? '2-COL' : '3-COL')} text={banner.title} img={banner.img} onClick={(e) => handleBannerClick(e, banner, idx)} draggable={!isOriginal && !readOnly} onDragStart={(e) => onBannerDragStart(e, idx, 'BANNER')} onDragEnter={(e) => onBannerDragEnter(e, idx)} onDrop={(e) => onBannerDrop(e, 'BANNER')} />
                    )}
@@ -973,8 +973,14 @@ export default function App() {
      } else if (blockCategory === 'SPECIAL') {
        newBlock.type = 'TODAY_BTV'; newBlock.items = [{ id: `t-item-${Date.now()}`, type: 'CONTENT', title: '대표 콘텐츠', img: '' }];
      } else {
-       newBlock.type = newBlockData.type; newBlock.items = [{title:'콘텐츠1'}];
-       if (newBlockData.type === 'TAB') newBlock.tabs = [{ id: 't1', name: '탭 1', items: [{title:'콘텐츠 1'}] }];
+       newBlock.type = newBlockData.type; 
+       // [수정] 콘텐츠 블록 생성 시 초기 아이템 3개 생성
+       newBlock.items = [
+           { id: `ni-1-${Date.now()}`, title: '콘텐츠 1' },
+           { id: `ni-2-${Date.now()}`, title: '콘텐츠 2' },
+           { id: `ni-3-${Date.now()}`, title: '콘텐츠 3' }
+       ];
+       if (newBlockData.type === 'TAB') newBlock.tabs = [{ id: 't1', name: '탭 1', items: [{title:'콘텐츠 1'},{title:'콘텐츠 2'},{title:'콘텐츠 3'}] }];
        if (newBlockData.useLeadingBanner) newBlock.leadingBanners = [{ title: newBlockData.leadingBannerTitle || '배너' }];
      }
      const _blocks = [...blocks]; _blocks.splice(1, 0, newBlock); setBlocks(_blocks); setModalState({ isOpen: false, type: null, data: null });
@@ -1029,7 +1035,7 @@ export default function App() {
           description: newRequestData.desc, 
           location: newRequestData.location, 
           remarks: finalRemarks,
-          jira_link: newRequestData.jiraLink,
+          // [수정] jira_link 필드 제거 (DB 컬럼 없음)
           status: 'PENDING',
           // [수정] type 컬럼 주석 해제 (DB insert 시 필요)
           type: requestType, 
@@ -1616,6 +1622,7 @@ export default function App() {
                   {modalState.type === 'EDIT_BANNER' && (
                     <div className="space-y-4">
                       {/* [수정] 빅배너 관련 타이틀, 설명 입력창 제거 */}
+                      
                       <div><label className="block text-xs font-bold text-slate-500 mb-1">배너명</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500" value={editBannerData.title} onChange={e => setEditBannerData({...editBannerData, title: e.target.value})} /></div>
                       <div className="flex gap-2 items-end"><div className="flex-1"><label className="block text-xs font-bold text-slate-500 mb-1">이미지 URL</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500" value={editBannerData.img} onChange={e => setEditBannerData({...editBannerData, img: e.target.value})} /></div><label className="cursor-pointer p-2 bg-[#2e3038] hover:bg-[#3e404b] rounded mb-0.5 border border-slate-600"><Upload size={16} className="text-slate-400"/><input type="file" className="hidden" accept="image/*" onChange={(e) => { const file = e.target.files[0]; if(file) setEditBannerData({...editBannerData, img: URL.createObjectURL(file)}); }} /></label></div>
                       <div><label className="block text-xs font-bold text-slate-500 mb-1">이벤트 ID</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500" value={editBannerData.eventId} onChange={e => setEditBannerData({...editBannerData, eventId: e.target.value})} /></div>
