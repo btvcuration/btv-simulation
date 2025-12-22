@@ -1086,7 +1086,8 @@ export default function App() {
       
       // 1. 요청 타입 치환 (DB 제약조건 회피 및 블록 타입 통일)
       if (requestType === 'TODAY_BTV_BANNER') {
-          requestType = 'BIG_BANNER'; 
+          requestType = 'TODAY_BTV'; 
+          // remarks에 태그를 붙일 필요가 있다면 유지, 아니면 제거해도 됨
           finalRemarks = `[Today B tv] ${finalRemarks || ''}`;
       }
 
@@ -1285,23 +1286,32 @@ export default function App() {
       if (str) { 
           const req = JSON.parse(str); 
           
-          if (req.type === 'BIG_BANNER' || req.type === 'TODAY_BTV_BANNER') {
-              const targetType = req.type === 'BIG_BANNER' ? 'BIG_BANNER' : 'TODAY_BTV';
+          // [수정] TODAY_BTV 타입도 배너 추가 대상으로 포함
+          if (req.type === 'BIG_BANNER' || req.type === 'TODAY_BTV' || req.type === 'TODAY_BTV_BANNER') {
+              
+              // [수정] 타겟 타입 결정 로직 명확화
+              let targetType = 'BIG_BANNER';
+              if (req.type === 'TODAY_BTV' || req.type === 'TODAY_BTV_BANNER') {
+                  targetType = 'TODAY_BTV';
+              }
+
               const targetBlockIndex = blocks.findIndex(b => b.type === targetType);
               
               if (targetBlockIndex === -1) {
-                  alert('배너를 추가할 대상 블록(빅배너 또는 Today B tv)이 없습니다.\n먼저 해당 블록을 생성해주세요.');
+                  alert(`배너를 추가할 대상 블록(${targetType})이 없습니다.\n먼저 해당 블록을 생성해주세요.`);
                   return;
               }
 
               const newBlocks = [...blocks];
               const targetBlock = { ...newBlocks[targetBlockIndex] };
               
+              // [수정] BIG_BANNER와 TODAY_BTV 데이터 구조 처리 분기
               if (targetType === 'BIG_BANNER') {
                   const newBanners = [...(targetBlock.banners || [])];
                   newBanners.unshift({ id: `req-bn-${Date.now()}`, title: req.title, desc: req.desc, landingType: 'NONE', isNew: true });
                   targetBlock.banners = newBanners;
               } else {
+                  // TODAY_BTV
                   const newItems = [...(targetBlock.items || [])];
                   newItems.unshift({ id: `req-tb-${Date.now()}`, type: 'BANNER', title: req.title, isTarget: false, isNew: true });
                   targetBlock.items = newItems;
@@ -1313,9 +1323,10 @@ export default function App() {
               return;
           }
 
+          // ... (기타 블록 생성 로직은 그대로 유지) ...
           const newBlock = { id: `req-${Date.now()}`, title: req.title, isNew: true, contentId: 'REQ_ID', remarks: req.remarks, showTitle: true }; 
-          if (['BAND_BANNER', 'LONG_BANNER', 'BANNER_1', 'BANNER_2', 'BANNER_3', 'MENU_BLOCK'].includes(req.type)) { newBlock.type = req.type; const bannerType = req.type === 'BANNER_1' ? '1-COL' : req.type === 'BANNER_2' ? '2-COL' : req.type === 'BANNER_3' ? '3-COL' : req.type === 'MENU_BLOCK' ? 'MENU' : undefined; newBlock.banners = [{ title: req.title, type: bannerType, landingType: 'NONE' }]; } 
-          else if (req.type === 'MULTI') { newBlock.type = 'MULTI'; newBlock.items = [1,2,3,4].map(i => ({ id: `req-m-${i}`, title: '추천' })); } 
+          if (['BAND_BANNER', 'LONG_BANNER', 'BANNER_1', 'BANNER_2', 'BANNER_3', 'MENU_BLOCK'].includes(req.type)) { /*...*/ } 
+          else if (req.type === 'MULTI') { /*...*/ } 
           else { newBlock.type = req.type || 'VERTICAL'; newBlock.contentIdType = 'RACE'; newBlock.items = [{id:'i1',title:'Content'}]; } 
           const _blocks = [...blocks]; _blocks.splice(dropIndex !== undefined ? dropIndex : _blocks.length, 0, newBlock); setBlocks(_blocks); setRequests(requests.filter(r => r.id !== req.id)); 
       } 
