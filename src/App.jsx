@@ -1216,8 +1216,6 @@ export default function App() {
       return days;
   };
 
-  const handleConfirmAction = async () => {
-    // [Helper] 메뉴 이름으로 ID를 찾는 재귀 함수 (handleConfirmAction 내부 또는 컴포넌트 내부에 정의)
   const findGnbIdByName = (list, name) => {
       for (const item of list) {
           if (item.name === name) return item.id;
