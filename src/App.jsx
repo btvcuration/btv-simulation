@@ -1084,15 +1084,27 @@ export default function App() {
       let requestType = newRequestData.type;
       let finalRemarks = newRequestData.remarks || '';
       
-      // [수정] 요청 타입 치환 (DB 제약조건 회피 및 블록 타입 통일)
+      // 1. 요청 타입 치환 (DB 제약조건 회피 및 블록 타입 통일)
       if (requestType === 'TODAY_BTV_BANNER') {
           requestType = 'BIG_BANNER'; 
           finalRemarks = `[Today B tv] ${finalRemarks || ''}`;
       }
-    
-      let finalDescription = newRequestData.desc;
+
+      // 2. [핵심 수정] DB에 없는 컬럼(type, remarks, jiraLink)들을 description 필드 하나에 텍스트로 통합 저장
+      // fetchRequests에서 정규식으로 이를 다시 파싱하도록 되어 있습니다.
+      let finalDescription = newRequestData.desc || '';
+      
+      // (1) 요청 타입 추가
+      finalDescription += `\n\n[요청 타입] ${requestType}`;
+      
+      // (2) 비고 추가
       if (finalRemarks) {
-          finalDescription += `\n\n[비고] ${finalRemarks}`;
+          finalDescription += `\n[비고] ${finalRemarks}`;
+      }
+
+      // (3) Jira 링크 추가 (혹시 DB에 jira_link 컬럼이 없을 경우를 대비해 통합)
+      if (newRequestData.jiraLink) {
+          finalDescription += `\n[Jira 티켓] ${newRequestData.jiraLink}`;
       }
 
       if (USE_MOCK_DATA) { 
@@ -1105,19 +1117,25 @@ export default function App() {
       
       if (!supabase) return; 
       
+      // 3. insert 객체에서 없는 컬럼(type, remarks, jira_link)을 모두 제거하고 description만 보냄
       const { error } = await supabase.from('requests').insert({ 
           requester: newRequestData.requester, 
           team: newRequestData.team, 
           title: newRequestData.headline, 
           gnb_target: newRequestData.gnb, 
-          description: finalDescription,
+          
+          // 통합된 설명 저장
+          description: finalDescription, 
+          
           location: newRequestData.location, 
-          // remarks: finalRemarks, 
           status: 'PENDING',
-          // [수정] type 컬럼 주석 해제 (DB insert 시 필요)
-          type: requestType, 
+          
           snapshot_new: null, 
           snapshot_original: null
+          
+          // [제거됨] type: requestType, 
+          // [제거됨] remarks: finalRemarks,
+          // [제거됨] jira_link: ...
       }); 
       
       if(!error) { 
@@ -1125,10 +1143,11 @@ export default function App() {
           window.location.reload(); 
       } else { 
           console.error(error);
-          alert('요청 등록 실패: ' + (error.message || '알 수 없는 오류')); // 에러 메시지 상세 출력
+          alert('요청 등록 실패: ' + (error.message || '알 수 없는 오류')); 
       } 
       setModalState({ ...modalState, isOpen: false }); 
   };
+  
   const handleAddMenu = () => { 
       const { parentId } = modalState.data || {}; 
       const nameToAdd = isDivider ? '---' : menuNameInput;
