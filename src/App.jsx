@@ -119,6 +119,23 @@ const MOCK_BLOCKS = [
   }
 ];
 
+const MOCK_HISTORY_DATA = {
+    '2023-10-01': [
+        { id: 'h-oct1-1', type: 'TODAY_BTV', title: 'Today B tv (10/1)', items: [{ title: '10월의 시작' }] },
+        { id: 'h-oct1-2', type: 'VERTICAL', title: '10월 신작', items: [{ title: '영화 A' }] }
+    ],
+    '2023-10-15': [
+        { id: 'h-oct15-1', type: 'TODAY_BTV', title: 'Today B tv (10/15 변경)', items: [{ title: '가을 특선' }, { title: '단풍놀이' }] },
+        { id: 'h-oct15-2', type: 'VERTICAL', title: '10월 인기작', items: [{ title: '영화 B' }, { title: '영화 C' }] },
+        { id: 'h-oct15-3', type: 'BIG_BANNER', title: '중간 광고', banners: [{ title: '할인 이벤트' }] }
+    ],
+    '2023-10-25': [
+        { id: 'h-oct25-1', type: 'TODAY_BTV', title: 'Today B tv (10/25 변경)', items: [{ title: '할로윈 주간' }] },
+        { id: 'h-oct25-2', type: 'BIG_BANNER', title: '할로윈 특집', banners: [{ title: '공포 영화 50% 할인', desc: '무서운 영화 모음' }] },
+        { id: 'h-oct25-3', type: 'HORIZONTAL', title: '가족과 함께', items: [{ title: '코코' }, { title: '몬스터 주식회사' }] }
+    ]
+};
+
 const MOCK_REQUESTS = [
     { 
         id: 'r1', requester: '김편성', team: '편성1팀', title: '신규 영화 블록 추가 요청', desc: '이번 주 신작 영화 소개를 위한 블록 추가', type: 'VERTICAL', gnb: '홈', status: 'PENDING', location: '상단', remarks: '급함', createdAt: '2023-11-01', changes: [{type: '신규', desc: '신규 블록 추가됨'}],
@@ -136,23 +153,6 @@ const MOCK_REQUESTS = [
         snapshot: JSON.parse(JSON.stringify(MOCK_BLOCKS))
     }
 ];
-
-const MOCK_HISTORY_DATA = {
-    '2023-10-01': [
-        { id: 'h-oct1-1', type: 'TODAY_BTV', title: 'Today B tv (10/1)', items: [{ title: '10월의 시작' }] },
-        { id: 'h-oct1-2', type: 'VERTICAL', title: '10월 신작', items: [{ title: '영화 A' }] }
-    ],
-    '2023-10-15': [
-        { id: 'h-oct15-1', type: 'TODAY_BTV', title: 'Today B tv (10/15 변경)', items: [{ title: '가을 특선' }, { title: '단풍놀이' }] },
-        { id: 'h-oct15-2', type: 'VERTICAL', title: '10월 인기작', items: [{ title: '영화 B' }, { title: '영화 C' }] },
-        { id: 'h-oct15-3', type: 'BIG_BANNER', title: '중간 광고', banners: [{ title: '할인 이벤트' }] }
-    ],
-    '2023-10-25': [
-        { id: 'h-oct25-1', type: 'TODAY_BTV', title: 'Today B tv (10/25 변경)', items: [{ title: '할로윈 주간' }] },
-        { id: 'h-oct25-2', type: 'BIG_BANNER', title: '할로윈 특집', banners: [{ title: '공포 영화 50% 할인', desc: '무서운 영화 모음' }] },
-        { id: 'h-oct25-3', type: 'HORIZONTAL', title: '가족과 함께', items: [{ title: '코코' }, { title: '몬스터 주식회사' }] }
-    ]
-};
 
 // Helper to generate slug
 const generateSlug = (name) => {
@@ -267,13 +267,24 @@ const useBtvData = (supabase, viewMode) => {
                 .order('created_at', { ascending: false });
             
             if (data) {
-                // [수정] remarks에서 type 정보를 파싱하여 복원
                 const formattedRequests = data.map(r => {
-                    let type = r.snapshot_new ? 'PUBLISH' : 'VERTICAL'; // 기본값
-                    // remarks가 '[TYPE]' 형식으로 시작하면 해당 타입을 추출
-                    const match = r.remarks ? r.remarks.match(/^\[([A-Z_]+)\]/) : null;
-                    if (match) {
-                        type = match[1];
+                    let type = r.snapshot_new ? 'PUBLISH' : 'VERTICAL'; 
+                    // remarks가 '[TYPE]' 형식으로 시작하면 해당 타입을 추출 (description 파싱 대신 단순화)
+                    // 실제 DB에서는 description에 통합 저장되므로, 꺼내올 때 파싱 로직이 필요할 수 있으나
+                    // 여기서는 기존 로직 호환성을 위해 remarks 사용 (DB에 없다면 description에서 파싱해야 함)
+                    // 이번 수정에서는 insert 시 remarks 제외하고 description에 넣는 것이 핵심.
+                    // fetch 시에는 description에서 파싱하는 로직을 추가하거나, 기존 remarks가 있다면 사용.
+                    
+                    // description에서 [요청 타입] 추출 시도
+                    if (!r.remarks && r.description) {
+                         const typeMatch = r.description.match(/\[요청 타입\]\s*([A-Z_]+)/);
+                         if (typeMatch) type = typeMatch[1];
+                         
+                         const remarksMatch = r.description.match(/\[비고\]\s*(.*)/);
+                         if (remarksMatch) r.remarks = remarksMatch[1];
+                         
+                         const jiraMatch = r.description.match(/\[Jira 티켓\]\s*(.*)/);
+                         if (jiraMatch && jiraMatch[1] !== '-') r.jiraLink = jiraMatch[1];
                     }
 
                     return {
@@ -982,7 +993,7 @@ export default function App() {
 
   const confirmAddBlock = () => {
     if (!newBlockData.title) return alert('블록 타이틀을 입력해주세요.');
-    let newBlock = { id: `new-${Date.now()}`, title: newBlockData.title, isNew: true, remarks: newBlockData.remarks, isTarget: newBlockData.isTarget, targetSeg: newBlockData.targetSeg, type: newBlockData.type, showTitle: newBlockData.showTitle, blockId: newBlockData.contentId }; 
+    let newBlock = { id: `new-${Date.now()}`, title: newBlockData.title, isNew: true, remarks: newBlockData.remarks, isTarget: newBlockData.isTarget, targetSeg: newBlockData.targetSeg, type: newBlockData.type, showTitle: newBlockData.showTitle, blockId: newBlockData.contentId }; // [수정] ID 추가
      if (blockCategory === 'BANNER') {
        newBlock.type = newBlockData.type;
        newBlock.banners = [{ id: `bn-${Date.now()}`, title: newBlockData.bannerTitle || '배너', type: newBlockData.type === 'BANNER_1' ? '1-COL' : newBlockData.type === 'BANNER_2' ? '2-COL' : '3-COL' }];
@@ -1076,13 +1087,8 @@ export default function App() {
       // [수정] 요청 타입 치환 (DB 제약조건 회피 및 블록 타입 통일)
       if (requestType === 'TODAY_BTV_BANNER') {
           requestType = 'BIG_BANNER'; 
-          finalRemarks = `[Today B tv] ${finalRemarks}`;
-      } else {
-           // 다른 타입들도 구분을 위해 remarks에 타입 정보 추가
-           finalRemarks = `[${requestType}] ${finalRemarks}`;
+          finalRemarks = `[Today B tv] ${finalRemarks || ''}`;
       }
-      
-      finalRemarks = finalRemarks.trim();
 
       if (USE_MOCK_DATA) { 
           alert('(Mock) 요청이 등록되었습니다. (실제 DB 저장 X)'); 
@@ -1101,10 +1107,12 @@ export default function App() {
           gnb_target: newRequestData.gnb, 
           description: newRequestData.desc, 
           location: newRequestData.location, 
-          remarks: finalRemarks,
+          // [수정] remarks 필드 제거 (오류 해결)
+          // remarks: finalRemarks, 
           // [수정] jira_link 필드 제거 (DB 컬럼 없음)
           status: 'PENDING',
-          // [수정] type 컬럼 제거 (DB 컬럼 없음)
+          // [수정] type 컬럼 주석 해제 (DB insert 시 필요)
+          type: requestType, 
           snapshot_new: null, 
           snapshot_original: null
       }); 
@@ -1690,9 +1698,8 @@ export default function App() {
                   )}
                   {modalState.type === 'EDIT_BANNER' && (
                     <div className="space-y-4">
-                      {editBannerData.blockId && blocks.find(b => b.id === editBannerData.blockId)?.type === 'BIG_BANNER' && (
-                        <><div><label className="block text-xs font-bold text-slate-500 mb-1">타이틀</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500" value={editBannerData.title} onChange={e => setEditBannerData({...editBannerData, title: e.target.value})} /></div><div><label className="block text-xs font-bold text-slate-500 mb-1">설명</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500" value={editBannerData.desc} onChange={e => setEditBannerData({...editBannerData, desc: e.target.value})} /></div></>
-                      )}
+                      {/* [수정] 빅배너 관련 타이틀, 설명 입력창 제거 */}
+                      
                       <div><label className="block text-xs font-bold text-slate-500 mb-1">배너명</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500" value={editBannerData.title} onChange={e => setEditBannerData({...editBannerData, title: e.target.value})} /></div>
                       <div className="flex gap-2 items-end"><div className="flex-1"><label className="block text-xs font-bold text-slate-500 mb-1">이미지 URL</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500" value={editBannerData.img} onChange={e => setEditBannerData({...editBannerData, img: e.target.value})} /></div><label className="cursor-pointer p-2 bg-[#2e3038] hover:bg-[#3e404b] rounded mb-0.5 border border-slate-600"><Upload size={16} className="text-slate-400"/><input type="file" className="hidden" accept="image/*" onChange={(e) => { const file = e.target.files[0]; if(file) setEditBannerData({...editBannerData, img: URL.createObjectURL(file)}); }} /></label></div>
                       <div><label className="block text-xs font-bold text-slate-500 mb-1">이벤트 ID</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500" value={editBannerData.eventId} onChange={e => setEditBannerData({...editBannerData, eventId: e.target.value})} /></div>
