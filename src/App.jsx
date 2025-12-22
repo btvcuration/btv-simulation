@@ -5,8 +5,8 @@ import {
   Star, Grid, FileText, CheckCircle, Download, ArrowRight, X, ArrowRightLeft,
   Inbox, User, ExternalLink, RotateCcw, Calendar as CalendarIcon, Clock, ChevronLeft, Tv, Film, PlayCircle, BookOpen, MessageSquare, Ban,
   Eye, EyeOff, Database, Layers, Hash, Edit3, AlertTriangle, Link, MousePointer, Image as ImageIcon,
-  MousePointerClick, Image, Tag, PlusCircle, MoreHorizontal, GripHorizontal, Target, StickyNote, Settings, Upload, Link2, Box, Filter,
-  Menu, History, Rewind, MoreVertical, Minus, Users, Check, XCircle
+  MousePointerClick, Tag, PlusCircle, MoreHorizontal, GripHorizontal, Target, StickyNote, Settings, Upload, Link2, Box, Filter,
+  Menu, History, Rewind, MoreVertical, Minus, Users, Check, XCircle, Send
 } from 'lucide-react';
 
 // ==========================================
@@ -53,7 +53,7 @@ const INITIAL_GNB_TREE = [
         id: '2', name: '영화', slug: 'movie', children: [
             { id: '2-1', name: '추천 영화', slug: 'rec-movie' },
             { id: '2-2', name: '신작', slug: 'new-movie' },
-            { id: 'div-1', name: '---', slug: 'div-1' }, // 구분선 예시
+            { id: 'div-1', name: '---', slug: 'div-1' }, 
             { id: '2-3', name: '장르별', slug: 'genre-movie' }
         ] 
     },
@@ -136,15 +136,18 @@ const MOCK_HISTORY_DATA = {
 const MOCK_REQUESTS = [
     { 
         id: 'r1', requester: '김편성', team: '편성1팀', title: '신규 영화 블록 추가 요청', desc: '이번 주 신작 영화 소개를 위한 블록 추가', type: 'VERTICAL', gnb: '홈', status: 'PENDING', location: '상단', remarks: '급함', createdAt: '2023-11-01', changes: [{type: '신규', desc: '신규 블록 추가됨'}],
-        originalSnapshot: JSON.parse(JSON.stringify(MOCK_BLOCKS)), 
-        snapshot: JSON.parse(JSON.stringify([
-            { ...MOCK_BLOCKS[0] },
-            { id: 'new-mock-b', type: 'VERTICAL', title: '신규 요청 블록', items: [{title: 'New Content'}] },
-            ...MOCK_BLOCKS.slice(1)
-        ]))
+        // Promotion 요청은 snapshot이 없음 (단건)
+        originalSnapshot: null, 
+        snapshot: null 
     },
     { 
         id: 'r2', requester: '이마케팅', team: '마케팅팀', title: '이벤트 배너 교체', desc: '봄맞이 할인 이벤트 배너', type: 'BIG_BANNER', gnb: '영화', status: 'PENDING', location: '중단', createdAt: '2023-11-02', changes: [{type: '수정', desc: '배너 이미지 교체됨'}],
+        originalSnapshot: null,
+        snapshot: null
+    },
+    {
+        id: 'r-pub-1', requester: '관리자', team: '편성팀', title: '[편성반영] 11월 1주차 정기 개편', desc: '정기 개편 반영 요청입니다.', type: 'PUBLISH', gnb: '홈', status: 'PENDING', location: '전체', createdAt: '2023-11-05',
+        // Publish 요청은 snapshot이 있음 (전체)
         originalSnapshot: JSON.parse(JSON.stringify(MOCK_BLOCKS)),
         snapshot: JSON.parse(JSON.stringify(MOCK_BLOCKS))
     }
@@ -169,7 +172,6 @@ const useBtvData = (supabase, viewMode) => {
     const [blocks, setBlocks] = useState(JSON.parse(JSON.stringify(MOCK_BLOCKS)));
     const [originalBlocks, setOriginalBlocks] = useState(JSON.parse(JSON.stringify(MOCK_BLOCKS))); 
     const [requests, setRequests] = useState([...MOCK_REQUESTS]);
-    const [savedRequests, setSavedRequests] = useState([...MOCK_REQUESTS]);
     const [isLoading, setIsLoading] = useState(false);
 
     const fetchGnb = async () => {
@@ -253,8 +255,7 @@ const useBtvData = (supabase, viewMode) => {
     useEffect(() => {
         const fetchRequests = async () => {
             if (USE_MOCK_DATA) {
-                setRequests(MOCK_REQUESTS.filter(r => r.status === 'PENDING'));
-                setSavedRequests(MOCK_REQUESTS);
+                setRequests(MOCK_REQUESTS);
                 return;
             }
 
@@ -267,17 +268,15 @@ const useBtvData = (supabase, viewMode) => {
             
             if (data) {
                 const formattedRequests = data.map(r => ({
-                    id: r.id, title: r.title, requester: r.requester, team: r.team, gnb: r.gnb_target, type: 'VERTICAL', 
+                    id: r.id, title: r.title, requester: r.requester, team: r.team, gnb: r.gnb_target, type: r.snapshot_new ? 'PUBLISH' : 'VERTICAL', 
                     desc: r.description, location: r.location, status: r.status, 
                     date: new Date(r.created_at).toLocaleDateString(),
                     createdAt: new Date(r.created_at).toLocaleString(),
-                    // [수정] DB 컬럼 매핑 추가 (remarks, jira_link)
                     remarks: r.remarks, 
                     jiraLink: r.jira_link,
                     changes: [], snapshot: r.snapshot_new, originalSnapshot: r.snapshot_original, menuPath: r.gnb_target 
                 }));
-                setRequests(formattedRequests.filter(r => r.status === 'PENDING'));
-                setSavedRequests(formattedRequests);
+                setRequests(formattedRequests);
             }
         };
         fetchRequests(); 
@@ -403,7 +402,7 @@ const useBtvData = (supabase, viewMode) => {
         expandedMenuIds, setExpandedMenuIds,
         blocks, setBlocks, 
         originalBlocks, setOriginalBlocks,
-        requests, setRequests, savedRequests, setSavedRequests,
+        requests, setRequests,
         isLoading, setIsLoading,
         handleMenuChange, toggleExpand,
         addGnb, addSubMenu, deleteGnb, deleteSubMenu, reorderMenu
@@ -861,21 +860,25 @@ export default function App() {
 
   useEffect(() => {
     if (!USE_MOCK_DATA) {
-        const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
-        script.async = true;
-        script.onload = () => {
-            if (window.supabase) {
-                const client = window.supabase.createClient(supabaseUrl, supabaseKey);
-                setSupabase(client);
-            }
-        };
-        document.body.appendChild(script);
-        return () => { document.body.removeChild(script); };
+        try {
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+            script.async = true;
+            script.onload = () => {
+                if (window.supabase) {
+                    const client = window.supabase.createClient(supabaseUrl, supabaseKey);
+                    setSupabase(client);
+                }
+            };
+            document.body.appendChild(script);
+            return () => { document.body.removeChild(script); };
+        } catch (e) {
+            console.error("Supabase Init Error", e);
+        }
     }
   }, []);
 
-  const { gnbList, setGnbList, currentMenuPath, currentMenuId, expandedMenuIds, toggleExpand, addGnb, deleteGnb, addSubMenu, deleteSubMenu, reorderMenu, blocks, setBlocks, originalBlocks, setOriginalBlocks, requests, setRequests, savedRequests, setSavedRequests, isLoading, handleMenuChange } = useBtvData(supabase, viewMode);
+  const { gnbList, setGnbList, currentMenuPath, currentMenuId, expandedMenuIds, toggleExpand, addGnb, deleteGnb, addSubMenu, deleteSubMenu, reorderMenu, blocks, setBlocks, originalBlocks, setOriginalBlocks, requests, setRequests, isLoading, handleMenuChange } = useBtvData(supabase, viewMode);
   
   const [viewRequest, setViewRequest] = useState(null);
   const [historyDate, setHistoryDate] = useState('');
@@ -901,6 +904,11 @@ export default function App() {
   const dragType = useRef(null);
   const [isDragEnabled, setIsDragEnabled] = useState(false);
   const [hoveredBlockIndex, setHoveredBlockIndex] = useState(null);
+
+  // [수정] 1. Requests 분리 (Promotion vs Publish)
+  // snapshot_new가 있으면 "편성 반영(Publish) 요청", 없으면 "프로모션(Promotion) 요청"으로 간주
+  const inboxRequests = requests.filter(r => !r.snapshot || r.snapshot.length === 0).filter(req => inboxFilter === 'ALL' || req.gnb === inboxFilter).filter(r => r.status === 'PENDING');
+  const unaRequests = requests.filter(r => r.snapshot && r.snapshot.length > 0).filter(req => unaFilter === 'ALL' || (req.menuPath && req.menuPath.includes(unaFilter)));
 
   const generateDiffs = () => {
     const changes = [];
@@ -965,9 +973,10 @@ export default function App() {
   const handleCreateRequest = async () => { 
       if (!newRequestData.headline || !newRequestData.requester) return alert('요청자 및 제목을 입력해주세요.'); 
       
+      // [수정] 2. 프로모션 요청 생성 (Snapshot 없음)
       if (USE_MOCK_DATA) { 
           alert('(Mock) 요청이 등록되었습니다. (실제 DB 저장 X)'); 
-          const mockNewReq = { id: `req-${Date.now()}`, requester: newRequestData.requester, team: newRequestData.team, title: newRequestData.headline, gnb: newRequestData.gnb, desc: newRequestData.desc, location: newRequestData.location, status: 'PENDING', type: newRequestData.type, remarks: newRequestData.remarks, jiraLink: newRequestData.jiraLink }; 
+          const mockNewReq = { id: `req-${Date.now()}`, requester: newRequestData.requester, team: newRequestData.team, title: newRequestData.headline, gnb: newRequestData.gnb, desc: newRequestData.desc, location: newRequestData.location, status: 'PENDING', type: newRequestData.type, remarks: newRequestData.remarks, jiraLink: newRequestData.jiraLink, snapshot_new: null }; 
           setRequests(prev => [mockNewReq, ...prev]); 
           setModalState({ ...modalState, isOpen: false }); 
           return; 
@@ -975,7 +984,6 @@ export default function App() {
       
       if (!supabase) return; 
       
-      // [수정] 실제 DB Insert 시 remarks, jira_link 포함
       const { error } = await supabase.from('requests').insert({ 
           requester: newRequestData.requester, 
           team: newRequestData.team, 
@@ -983,9 +991,11 @@ export default function App() {
           gnb_target: newRequestData.gnb, 
           description: newRequestData.desc, 
           location: newRequestData.location, 
-          remarks: newRequestData.remarks,     // 추가
-          jira_link: newRequestData.jiraLink,  // 추가
-          status: 'PENDING' 
+          remarks: newRequestData.remarks,
+          jira_link: newRequestData.jiraLink,
+          status: 'PENDING',
+          snapshot_new: null, // 프로모션 요청은 스냅샷 없음
+          snapshot_original: null
       }); 
       
       if(!error) { 
@@ -1069,15 +1079,16 @@ export default function App() {
     if (type === 'DELETE_BLOCK') setBlocks(prev => prev.filter(b => b.id !== data));
     else if (type === 'DELETE_REQUEST') { 
         if (!USE_MOCK_DATA && supabase) await supabase.from('requests').delete().eq('id', data);
-        setSavedRequests(prev => prev.filter(r => r.id !== data)); 
+        setRequests(prev => prev.filter(r => r.id !== data)); 
         if (viewRequest?.id === data) setViewRequest(null); 
     }
     else if (type === 'RESET') { setBlocks(JSON.parse(JSON.stringify(originalBlocks))); setRequests([]); }
     else if (type === 'SAVE') { 
+        // [수정] 3. 편성 반영 요청 (Snapshot 포함)
         if (USE_MOCK_DATA) {
             alert('(Mock) 저장 완료 흉내');
-            const newSavedReq = { id: `saved-${Date.now()}`, title: requestTitle, status: 'PENDING', createdAt: new Date().toISOString().split('T')[0], date: scheduleDate, requester: '관리자 (Mock)', changes: diffSummary, menuPath: currentMenuPath, originalSnapshot: JSON.parse(JSON.stringify(originalBlocks)), snapshot: JSON.parse(JSON.stringify(blocks)) };
-            setSavedRequests(prev => [newSavedReq, ...prev]);
+            const newSavedReq = { id: `saved-${Date.now()}`, title: requestTitle, status: 'PENDING', createdAt: new Date().toISOString().split('T')[0], date: scheduleDate, requester: '관리자 (Mock)', changes: diffSummary, menuPath: currentMenuPath, originalSnapshot: JSON.parse(JSON.stringify(originalBlocks)), snapshot: JSON.parse(JSON.stringify(blocks)), snapshot_new: JSON.parse(JSON.stringify(blocks)) };
+            setRequests(prev => [newSavedReq, ...prev]);
         } else {
             if (!supabase) return;
             const snapshot = blocks.map((b, idx) => ({ ...b, sort_order: idx }));
@@ -1086,19 +1097,19 @@ export default function App() {
         }
     }
     else if (type === 'APPROVE') { 
+        // [수정] 4. 편성 반영 완료 로직 (승인 -> 반영)
         const targetReqId = data.id;
         if (USE_MOCK_DATA) { 
-            // 1. 요청 목록에서 제거 (Inbox) 및 전체 내역 업데이트 (History)
-            setRequests(prev => prev.filter(r => r.id !== targetReqId));
-            setSavedRequests(prev => prev.map(r => r.id === targetReqId ? { ...r, status: 'APPROVED' } : r));
+            // 1. 요청 목록 업데이트
+            setRequests(prev => prev.map(r => r.id === targetReqId ? { ...r, status: 'APPROVED' } : r));
             
-            // 2. 에디터 블록에 스냅샷 반영 (승인된 내용으로 덮어쓰기)
+            // 2. 에디터 블록에 스냅샷 반영
             if (data.snapshot) { 
                 const newSnapshot = JSON.parse(JSON.stringify(data.snapshot));
                 setBlocks(newSnapshot); 
                 setOriginalBlocks(JSON.parse(JSON.stringify(newSnapshot))); 
             }
-            alert(`요청('${data.title}')이 승인 및 반영되었습니다.`);
+            alert(`편성이 반영(배포)되었습니다.`);
         } 
         else {
             if (!supabase) return;
@@ -1107,7 +1118,7 @@ export default function App() {
             const { error } = await supabase.from('blocks').insert(newBlocksData);
             if(!error) { 
                 await supabase.from('requests').update({ status: 'APPROVED' }).eq('id', data.id); 
-                alert('반영되었습니다!'); 
+                alert('편성이 반영(배포)되었습니다!'); 
                 window.location.reload(); 
             }
         }
@@ -1145,8 +1156,7 @@ export default function App() {
       } 
   };
 
-  const filteredRequests = requests.filter(req => inboxFilter === 'ALL' || req.gnb === inboxFilter).filter(r => r.status === 'PENDING');
-  const filteredSavedRequests = savedRequests.filter(req => unaFilter === 'ALL' || (req.menuPath && req.menuPath.includes(unaFilter)));
+  // 기존 단순 필터링 제거, 렌더링 시 inboxRequests / unaRequests 사용
   
   if (isLoading) {
     return (
@@ -1228,7 +1238,7 @@ export default function App() {
           <div className="flex items-center gap-2 shrink-0">
             <div className="relative">
                 <select value={viewMode} onChange={(e) => { setViewMode(e.target.value); if(e.target.value === 'HISTORY') setModalState({ isOpen: true, type: 'HISTORY_SELECT' }); else if(e.target.value === 'EDITOR') setHistoryDate(''); }} className="bg-[#191b23] border border-[#2e3038] hover:border-[#7387ff] rounded px-3 py-1.5 text-xs font-bold text-white outline-none cursor-pointer appearance-none pr-8">
-                    <option value="EDITOR">에디터</option><option value="REQUEST">UNA ({savedRequests.length})</option><option value="HISTORY">이력</option>
+                    <option value="EDITOR">에디터</option><option value="REQUEST">UNA ({unaRequests.length})</option><option value="HISTORY">이력</option>
                 </select>
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400"><ChevronDown size={12} /></div>
             </div>
@@ -1283,10 +1293,10 @@ export default function App() {
                 </div>
               </div>
             </div>
-            {/* Inbox */}
+            {/* Inbox - 오직 프로모션 요청만 표시 */}
             <div className={`fixed right-0 top-14 bottom-0 w-80 bg-[#161820] border-l border-[#2e3038] shadow-2xl transition-transform duration-300 z-30 flex flex-col ${showInbox ? 'translate-x-0' : 'translate-x-full'}`}>
               <div className="p-4 border-b border-[#2e3038] bg-[#191b23]">
-                <div className="flex justify-between items-center mb-4"><h3 className="text-sm font-bold text-white flex items-center gap-2"><Inbox size={16} className="text-[#7387ff]" /> 프로모션 요청 <span className="bg-red-500 text-white text-[10px] px-1.5 rounded-full">{filteredRequests.length}</span></h3><button onClick={() => setShowInbox(false)}><X size={16} className="text-slate-500 hover:text-white"/></button></div>
+                <div className="flex justify-between items-center mb-4"><h3 className="text-sm font-bold text-white flex items-center gap-2"><Inbox size={16} className="text-[#7387ff]" /> 프로모션 요청함 <span className="bg-red-500 text-white text-[10px] px-1.5 rounded-full">{inboxRequests.length}</span></h3><button onClick={() => setShowInbox(false)}><X size={16} className="text-slate-500 hover:text-white"/></button></div>
                 <div className="flex items-center gap-2">
                    <Filter size={12} className="text-slate-500"/>
                    <select className="bg-[#100d1d] border border-[#2e3038] rounded px-2 py-1 text-xs text-slate-300 outline-none flex-1" value={inboxFilter} onChange={(e) => setInboxFilter(e.target.value)}>
@@ -1295,17 +1305,17 @@ export default function App() {
                 </div>
               </div>
               <div className="p-4 border-b border-[#2e3038]"><button onClick={() => setModalState({ isOpen: true, type: 'NEW_REQUEST', data: null })} className="w-full py-2 bg-[#2e3038] hover:bg-[#3e404b] text-white text-xs font-bold rounded flex items-center justify-center gap-2 transition-colors"><Plus size={14}/> 신규 요청 등록</button></div>
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">{filteredRequests.length === 0 ? <div className="text-center text-slate-500 text-xs py-10">요청이 없습니다.</div> : filteredRequests.map(req => (<div key={req.id} draggable={req.status === 'PENDING'} onDragStart={(e) => onDragStart(e, null, 'REQUEST', req)} className={`border p-3 rounded-lg transition-colors group relative ${req.status === 'PENDING' ? 'bg-[#100d1d] border-[#2e3038] cursor-grab hover:border-[#7387ff] active:cursor-grabbing' : 'bg-[#191b23] border-[#2e3038] opacity-50 cursor-default'}`}><div className="flex justify-between items-start mb-2"><span className="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded flex items-center gap-1"><User size={8} /> {req.requester}</span>{req.status === 'REJECTED' && <span className="text-[10px] text-red-500 font-bold border border-red-500/50 px-1 rounded">거절됨</span>}</div><h4 className="text-sm font-bold text-slate-200 mb-1">{req.title}</h4><div className="text-[10px] text-slate-500 mb-2 space-y-0.5"><p>{req.desc}</p><p className="text-slate-400">위치: {req.location || '-'}</p>{req.remarks && <p className="text-yellow-500/70">비고: {req.remarks}</p>}</div><div className="mt-2 flex justify-between items-center"><span className="text-[9px] text-[#7387ff] border border-[#7387ff]/30 px-1.5 py-0.5 rounded">{req.type}</span><span className="text-[9px] text-slate-500">{req.gnb}</span></div></div>))}</div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">{inboxRequests.length === 0 ? <div className="text-center text-slate-500 text-xs py-10">요청이 없습니다.</div> : inboxRequests.map(req => (<div key={req.id} draggable={req.status === 'PENDING'} onDragStart={(e) => onDragStart(e, null, 'REQUEST', req)} className={`border p-3 rounded-lg transition-colors group relative ${req.status === 'PENDING' ? 'bg-[#100d1d] border-[#2e3038] cursor-grab hover:border-[#7387ff] active:cursor-grabbing' : 'bg-[#191b23] border-[#2e3038] opacity-50 cursor-default'}`}><div className="flex justify-between items-start mb-2"><span className="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded flex items-center gap-1"><User size={8} /> {req.requester}</span>{req.status === 'REJECTED' && <span className="text-[10px] text-red-500 font-bold border border-red-500/50 px-1 rounded">거절됨</span>}</div><h4 className="text-sm font-bold text-slate-200 mb-1">{req.title}</h4><div className="text-[10px] text-slate-500 mb-2 space-y-0.5"><p>{req.desc}</p><p className="text-slate-400">위치: {req.location || '-'}</p>{req.remarks && <p className="text-yellow-500/70">비고: {req.remarks}</p>}</div><div className="mt-2 flex justify-between items-center"><span className="text-[9px] text-[#7387ff] border border-[#7387ff]/30 px-1.5 py-0.5 rounded">{req.type}</span><span className="text-[9px] text-slate-500">{req.gnb}</span></div></div>))}</div>
             </div>
           </div>
         )}
 
-        {/* UNA (REQUEST HISTORY) VIEW */}
+        {/* UNA (REQUEST HISTORY) VIEW - 오직 편성 반영(Publish) 요청만 표시 */}
         {viewMode === 'REQUEST' && (
             <div className="flex-1 overflow-y-auto p-6 bg-[#100d1d]">
                 <div className="max-w-5xl mx-auto">
                     <div className="mb-6 flex items-center justify-between">
-                        <h2 className="text-xl font-bold text-white flex items-center gap-2"><Inbox className="text-[#7387ff]"/> UNA (편성 요청 내역)</h2>
+                        <h2 className="text-xl font-bold text-white flex items-center gap-2"><Inbox className="text-[#7387ff]"/> UNA (편성 반영 내역)</h2>
                         <div className="flex items-center gap-2">
                             <span className="text-slate-500 text-xs">메뉴 필터:</span>
                             <select className="bg-[#191b23] border border-[#2e3038] rounded px-3 py-1.5 text-xs text-slate-300 outline-none" value={unaFilter} onChange={(e) => setUnaFilter(e.target.value)}>
@@ -1316,17 +1326,17 @@ export default function App() {
                     </div>
 
                     <div className="space-y-4">
-                        {filteredSavedRequests.length === 0 ? (
-                            <div className="text-center py-20 text-slate-500 border border-dashed border-[#2e3038] rounded-lg">요청 내역이 없습니다.</div>
+                        {unaRequests.length === 0 ? (
+                            <div className="text-center py-20 text-slate-500 border border-dashed border-[#2e3038] rounded-lg">편성 반영 내역이 없습니다.</div>
                         ) : (
-                            filteredSavedRequests.map(req => (
+                            unaRequests.map(req => (
                                 <div key={req.id} className={`bg-[#191b23] border border-[#2e3038] rounded-lg p-5 transition-all hover:border-[#7387ff]/50 flex gap-4 ${req.status === 'APPROVED' ? 'opacity-70' : ''}`}>
                                     {/* Status Icon */}
                                     <div className="flex flex-col items-center pt-1 gap-2 min-w-[60px]">
-                                        {req.status === 'PENDING' ? <div className="w-10 h-10 rounded-full bg-yellow-500/20 text-yellow-500 flex items-center justify-center"><Clock size={20}/></div>
+                                        {req.status === 'PENDING' ? <div className="w-10 h-10 rounded-full bg-blue-500/20 text-blue-500 flex items-center justify-center animate-pulse"><Send size={20}/></div>
                                         : req.status === 'APPROVED' ? <div className="w-10 h-10 rounded-full bg-green-500/20 text-green-500 flex items-center justify-center"><Check size={20}/></div>
                                         : <div className="w-10 h-10 rounded-full bg-red-500/20 text-red-500 flex items-center justify-center"><XCircle size={20}/></div>}
-                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${req.status === 'PENDING' ? 'bg-yellow-900/30 text-yellow-500' : req.status === 'APPROVED' ? 'bg-green-900/30 text-green-500' : 'bg-red-900/30 text-red-500'}`}>{req.status}</span>
+                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${req.status === 'PENDING' ? 'bg-blue-900/30 text-blue-500' : req.status === 'APPROVED' ? 'bg-green-900/30 text-green-500' : 'bg-red-900/30 text-red-500'}`}>{req.status === 'PENDING' ? '반영 대기' : '반영 완료'}</span>
                                     </div>
 
                                     {/* Content */}
@@ -1340,23 +1350,18 @@ export default function App() {
                                                     <span className="flex items-center gap-1 px-2 py-0.5 bg-[#2e3038] rounded text-slate-300">{req.gnb}</span>
                                                 </div>
                                             </div>
-                                            {/* Action Buttons for Pending Requests */}
+                                            {/* Action Buttons for Pending Requests - 반려 제거, 반영 완료만 남김 */}
                                             {req.status === 'PENDING' && (
                                                 <div className="flex gap-2">
-                                                    <button onClick={() => handleRejectRequest(req.id)} className="px-3 py-1.5 border border-red-500/30 text-red-400 hover:bg-red-500/10 rounded text-xs font-bold transition-colors">반려</button>
-                                                    <button onClick={() => reqApprove(req)} className="px-4 py-1.5 bg-[#7387ff] hover:bg-[#5b6dbf] text-white rounded text-xs font-bold transition-colors shadow-lg shadow-[#7387ff]/20">승인</button>
+                                                    <button onClick={() => reqApprove(req)} className="px-4 py-1.5 bg-[#7387ff] hover:bg-[#5b6dbf] text-white rounded text-xs font-bold transition-colors shadow-lg shadow-[#7387ff]/20 flex items-center gap-1"><Send size={12}/> 편성 반영 완료</button>
                                                 </div>
                                             )}
                                         </div>
 
-                                        <div className="bg-[#100d1d] rounded p-3 text-xs text-slate-400 mb-3 border border-[#2e3038]">
-                                            <p className="mb-1"><span className="text-slate-500 font-bold mr-2">요청 내용:</span> {req.desc}</p>
-                                            {req.remarks && <p><span className="text-slate-500 font-bold mr-2">비고:</span> {req.remarks}</p>}
-                                        </div>
-
                                         {/* Changes Summary */}
                                         {req.changes && req.changes.length > 0 && (
-                                            <div className="space-y-1">
+                                            <div className="space-y-1 bg-[#100d1d] rounded p-3 border border-[#2e3038]">
+                                                <p className="text-xs font-bold text-slate-500 mb-2">변경 내역:</p>
                                                 {req.changes.map((change, idx) => (
                                                     <div key={idx} className="flex items-center gap-2 text-xs">
                                                         <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${change.type === '신규' ? 'bg-blue-500/20 text-blue-400' : 'bg-orange-500/20 text-orange-400'}`}>{change.type}</span>
@@ -1380,11 +1385,12 @@ export default function App() {
             <div className={`bg-[#191b23] rounded-xl border border-[#2e3038] shadow-2xl overflow-hidden flex flex-col max-h-[85vh] ${modalState.type === 'NEW_REQUEST' || modalState.type === 'ADD_BLOCK' || modalState.type === 'HISTORY_SELECT' ? 'w-[500px]' : 'w-[450px]'}`}>
               <div className="p-5 border-b border-[#2e3038] flex justify-between items-center bg-[#1e2029] shrink-0">
                 <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  {modalState.type === 'HISTORY_SELECT' ? '히스토리 탐색' : modalState.type === 'NEW_REQUEST' ? '신규 프로모션 요청 등록' : modalState.type === 'ADD_BLOCK' ? '신규 블록 생성' : modalState.type === 'SAVE' ? '편성 요청 정보 입력' : modalState.type === 'APPROVE' ? '편성 반영 확인' : modalState.type === 'EDIT_ID' ? '블록 설정 수정' : modalState.type === 'EDIT_BANNER' ? '배너 수정' : modalState.type === 'EDIT_CONTENT' ? '콘텐츠 수정' : modalState.type === 'EDIT_TAB_NAME' ? '탭 이름 수정' : modalState.type === 'ADD_GNB' ? '최상위 메뉴 추가' : modalState.type === 'ADD_SUBMENU' ? '하위 메뉴 추가' : modalState.type === 'DELETE_BANNER_CONFIRM' ? '삭제 확인' : '확인'}
+                  {modalState.type === 'HISTORY_SELECT' ? '히스토리 탐색' : modalState.type === 'NEW_REQUEST' ? '신규 프로모션 요청 등록' : modalState.type === 'ADD_BLOCK' ? '신규 블록 생성' : modalState.type === 'SAVE' ? '편성 반영 정보 입력' : modalState.type === 'APPROVE' ? '편성 반영 확인' : modalState.type === 'EDIT_ID' ? '블록 설정 수정' : modalState.type === 'EDIT_BANNER' ? '배너 수정' : modalState.type === 'EDIT_CONTENT' ? '콘텐츠 수정' : modalState.type === 'EDIT_TAB_NAME' ? '탭 이름 수정' : modalState.type === 'ADD_GNB' ? '최상위 메뉴 추가' : modalState.type === 'ADD_SUBMENU' ? '하위 메뉴 추가' : modalState.type === 'DELETE_BANNER_CONFIRM' ? '삭제 확인' : '확인'}
                 </h3>
                 <button onClick={() => setModalState({ ...modalState, isOpen: false })}><X size={18} className="text-slate-500 hover:text-white"/></button>
               </div>
               <div className="p-6 overflow-y-auto">
+                  {/* ... (기존 모달 내용 생략 - 변경 사항 없음) ... */}
                   {modalState.type === 'HISTORY_SELECT' && (
                       <div className="space-y-4">
                           <p className="text-sm text-slate-400 mb-2">확인하고 싶은 과거 날짜를 선택해주세요.</p>
@@ -1511,11 +1517,11 @@ export default function App() {
                   {modalState.type === 'SAVE' && (<div className="space-y-4"><div><label className="block text-xs font-bold text-slate-500 mb-1">요청 제목</label><input type="text" value={requestTitle} onChange={e => setRequestTitle(e.target.value)} className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white"/></div>{diffSummary.length > 0 && <div className="bg-[#100d1d] p-2 rounded max-h-32 overflow-y-auto">{diffSummary.map((d,i)=><div key={i} className="text-xs text-slate-400">• {d.desc}</div>)}</div>}</div>)}
                   {modalState.type === 'APPROVE' && (
                     <div className="text-center">
-                        <div className="w-12 h-12 bg-[#7387ff]/20 text-[#7387ff] rounded-full flex items-center justify-center mx-auto mb-4"><CheckCircle size={24}/></div>
-                        <h4 className="text-lg font-bold text-white mb-2">승인하시겠습니까?</h4>
+                        <div className="w-12 h-12 bg-[#7387ff]/20 text-[#7387ff] rounded-full flex items-center justify-center mx-auto mb-4"><Send size={24}/></div>
+                        <h4 className="text-lg font-bold text-white mb-2">편성을 반영하시겠습니까?</h4>
                         <p className="text-sm text-slate-400 mb-4">
-                            '{modalState.data?.title}' 요청을 승인합니다.<br/>
-                            승인 시 현재 에디터 내용이 요청된 내용으로 변경됩니다.
+                            '{modalState.data?.title}' 내용을<br/>
+                            실제 서비스에 반영(배포)합니다.
                         </p>
                     </div>
                   )}
