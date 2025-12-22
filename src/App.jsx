@@ -14,7 +14,7 @@ import {
 // true: 가짜 데이터 사용 (UI 테스트용)
 // false: 실제 Supabase DB 연동 (상용화용)
 // ==========================================
-const USE_MOCK_DATA = false;
+const USE_MOCK_DATA = true;
 
 // --- Supabase Config ---
 const supabaseUrl = 'https://zzzgixizyafwatdmvuxc.supabase.co';
@@ -136,7 +136,6 @@ const MOCK_HISTORY_DATA = {
 const MOCK_REQUESTS = [
     { 
         id: 'r1', requester: '김편성', team: '편성1팀', title: '신규 영화 블록 추가 요청', desc: '이번 주 신작 영화 소개를 위한 블록 추가', type: 'VERTICAL', gnb: '홈', status: 'PENDING', location: '상단', remarks: '급함', createdAt: '2023-11-01', changes: [{type: '신규', desc: '신규 블록 추가됨'}],
-        // Promotion 요청은 snapshot이 없음 (단건)
         originalSnapshot: null, 
         snapshot: null 
     },
@@ -147,7 +146,6 @@ const MOCK_REQUESTS = [
     },
     {
         id: 'r-pub-1', requester: '관리자', team: '편성팀', title: '[편성반영] 11월 1주차 정기 개편', desc: '정기 개편 반영 요청입니다.', type: 'PUBLISH', gnb: '홈', status: 'PENDING', location: '전체', createdAt: '2023-11-05',
-        // Publish 요청은 snapshot이 있음 (전체)
         originalSnapshot: JSON.parse(JSON.stringify(MOCK_BLOCKS)),
         snapshot: JSON.parse(JSON.stringify(MOCK_BLOCKS))
     }
@@ -155,7 +153,6 @@ const MOCK_REQUESTS = [
 
 // Helper to generate slug
 const generateSlug = (name) => {
-    // 한글이 포함된 경우 랜덤 문자열 조합, 영문인 경우 소문자 변환
     const isKorean = /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(name);
     if (isKorean || name === '---') {
         return `menu-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -311,25 +308,17 @@ const useBtvData = (supabase, viewMode) => {
     const addGnb = async (name) => {
         const slug = generateSlug(name);
         const newGnb = { id: `gnb-${Date.now()}`, name, slug, children: [] };
-        
-        // Optimistic UI: 즉시 반영
         setGnbList(prev => [...prev, newGnb]);
 
         if (!USE_MOCK_DATA) {
             const { error } = await supabase.from('gnb_menus').insert({ name, slug, sort_order: gnbList.length });
-            if(error) {
-                console.error("GNB Add Error:", error);
-                // 에러 시 롤백 로직이 필요하지만, 여기서는 생략
-                fetchGnb(); 
-            } else {
-                fetchGnb(); // ID 동기화를 위해 재조회
-            }
+            if(error) fetchGnb(); 
+            else fetchGnb(); 
         }
     };
 
     const addSubMenu = async (parentId, name) => {
         const slug = generateSlug(name);
-        // Optimistic UI: 즉시 반영
         setGnbList(prev => prev.map(item => {
             if (item.id === parentId) {
                 return { ...item, children: [...(item.children || []), { id: `sub-${Date.now()}`, name, slug }] };
@@ -342,41 +331,51 @@ const useBtvData = (supabase, viewMode) => {
             const parent = gnbList.find(g => g.id === parentId);
             const sortOrder = parent ? parent.children.length : 0;
             const { error } = await supabase.from('gnb_menus').insert({ name, slug, parent_id: parentId, sort_order: sortOrder });
-            if(error) console.error("Submenu Add Error:", error);
-            else fetchGnb();
+            if(!error) fetchGnb();
         }
     };
 
     const reorderMenu = async (dragId, dropId, type) => {
-        // Optimistic UI: 즉시 반영 (공통 로직)
         const newList = JSON.parse(JSON.stringify(gnbList));
+        if (dragId === dropId) return;
+
         if (type === 'GNB') {
             const dragIndex = newList.findIndex(i => i.id === dragId);
-            const dropIndex = newList.findIndex(i => i.id === dropId);
             const [dragItem] = newList.splice(dragIndex, 1);
+            const dropIndex = newList.findIndex(i => i.id === dropId); 
             newList.splice(dropIndex, 0, dragItem);
             setGnbList(newList);
+
+            if (!USE_MOCK_DATA) {
+                newList.forEach(async (item, index) => {
+                    await supabase.from('gnb_menus').update({ sort_order: index }).eq('id', item.id);
+                });
+            }
         } else {
             for (let gnb of newList) {
                 const dragIndex = gnb.children.findIndex(c => c.id === dragId);
-                const dropIndex = gnb.children.findIndex(c => c.id === dropId);
-                if (dragIndex > -1 && dropIndex > -1) {
+                if (dragIndex > -1) {
                     const [dragItem] = gnb.children.splice(dragIndex, 1);
-                    gnb.children.splice(dropIndex, 0, dragItem);
+                    const dropIndex = gnb.children.findIndex(c => c.id === dropId);
+                    if (dropIndex > -1) {
+                        gnb.children.splice(dropIndex, 0, dragItem);
+                    } else {
+                        gnb.children.push(dragItem);
+                    }
+                    
+                    if (!USE_MOCK_DATA) {
+                        gnb.children.forEach(async (item, index) => {
+                            await supabase.from('gnb_menus').update({ sort_order: index }).eq('id', item.id);
+                        });
+                    }
                     break;
                 }
             }
             setGnbList(newList);
         }
-
-        if (!USE_MOCK_DATA) {
-            // DB Reorder Logic (실제 구현 필요)
-            // alert("상용 DB 모드에서는 순서 변경이 즉시 저장되지 않을 수 있습니다 (데모)."); // [수정] 알림 제거
-        }
     }
 
     const deleteGnb = async (id) => {
-          // Optimistic UI
           setGnbList(prev => prev.filter(item => item.id !== id));
           if (currentMenuId === id) { setCurrentMenuId(null); setCurrentMenuPath(''); }
 
@@ -387,7 +386,6 @@ const useBtvData = (supabase, viewMode) => {
     };
 
     const deleteSubMenu = async (parentId, childId) => {
-          // Optimistic UI
           setGnbList(prev => prev.map(item => {
               if (item.id === parentId) {
                   return { ...item, children: item.children.filter(c => c.id !== childId) };
@@ -613,7 +611,7 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
         bgClass = `${CONTENT_STYLE.bg} ${CONTENT_STYLE.border} ${CONTENT_STYLE.hover} cursor-pointer`;
         textClass = CONTENT_STYLE.text;
     }
-    const hasImage = img && img.startsWith('http');
+    const hasImage = img && img.length > 0;
     const displayText = typeof text === 'string' ? text : 'Content';
 
     return (
@@ -1150,7 +1148,6 @@ export default function App() {
       if (str) { 
           const req = JSON.parse(str); 
           
-          // [수정] 3. 빅배너 or Today B tv 배너 요청 시 기존 블록에 추가 로직
           if (req.type === 'BIG_BANNER' || req.type === 'TODAY_BTV_BANNER') {
               const targetType = req.type === 'BIG_BANNER' ? 'BIG_BANNER' : 'TODAY_BTV';
               const targetBlockIndex = blocks.findIndex(b => b.type === targetType);
@@ -1168,7 +1165,6 @@ export default function App() {
                   newBanners.unshift({ id: `req-bn-${Date.now()}`, title: req.title, desc: req.desc, landingType: 'NONE', isNew: true });
                   targetBlock.banners = newBanners;
               } else {
-                  // TODAY_BTV
                   const newItems = [...(targetBlock.items || [])];
                   newItems.unshift({ id: `req-tb-${Date.now()}`, type: 'BANNER', title: req.title, isTarget: false, isNew: true });
                   targetBlock.items = newItems;
@@ -1176,11 +1172,10 @@ export default function App() {
               
               newBlocks[targetBlockIndex] = targetBlock;
               setBlocks(newBlocks);
-              setRequests(prev => prev.filter(r => r.id !== req.id)); // 요청 목록에서 제거
+              setRequests(prev => prev.filter(r => r.id !== req.id)); 
               return;
           }
 
-          // 그 외 일반 블록 요청은 신규 블록 생성
           const newBlock = { id: `req-${Date.now()}`, title: req.title, isNew: true, contentId: 'REQ_ID', remarks: req.remarks, showTitle: true }; 
           if (['BAND_BANNER', 'LONG_BANNER', 'BANNER_1', 'BANNER_2', 'BANNER_3', 'MENU_BLOCK'].includes(req.type)) { newBlock.type = req.type; const bannerType = req.type === 'BANNER_1' ? '1-COL' : req.type === 'BANNER_2' ? '2-COL' : req.type === 'BANNER_3' ? '3-COL' : req.type === 'MENU_BLOCK' ? 'MENU' : undefined; newBlock.banners = [{ title: req.title, type: bannerType, landingType: 'NONE' }]; } 
           else if (req.type === 'MULTI') { newBlock.type = 'MULTI'; newBlock.items = [1,2,3,4].map(i => ({ id: `req-m-${i}`, title: '추천' })); } 
@@ -1189,8 +1184,6 @@ export default function App() {
       } 
   };
 
-  // 기존 단순 필터링 제거, 렌더링 시 inboxRequests / unaRequests 사용
-  
   if (isLoading) {
     return (
       <div className="h-screen flex flex-col items-center justify-center bg-[#100d1d] text-slate-300 gap-4">
