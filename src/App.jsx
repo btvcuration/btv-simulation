@@ -79,8 +79,7 @@ const MOCK_BLOCKS = [
     items: [
       { id: 'tb1', type: 'BANNER', title: '메인 배너', img: '', isTarget: true },
       { id: 'tb2', type: 'CONTENT', title: '인기 영화 1' },
-      { id: 'tb3', type: 'CONTENT', title: '인기 영화 2' },
-      { id: 'tb4', type: 'BANNER', title: '서브 배너' }
+      { id: 'tb3', type: 'CONTENT', title: '인기 영화 2' }
     ]
   },
   {
@@ -103,7 +102,7 @@ const MOCK_BLOCKS = [
     contentIdType: 'RACE',
     contentId: 'RT_POPULAR',
     items: [
-        { id: 'v1', title: '영화 A' }, { id: 'v2', title: '영화 B' }, { id: 'v3', title: '영화 C' }, { id: 'v4', title: '영화 D' }
+        { id: 'v1', title: '영화 A' }, { id: 'v2', title: '영화 B' }, { id: 'v3', title: '영화 C' }
     ]
   },
   {
@@ -934,6 +933,8 @@ export default function App() {
 
   const inboxRequests = requests.filter(r => !r.snapshot || r.snapshot.length === 0).filter(req => inboxFilter === 'ALL' || req.gnb === inboxFilter).filter(r => r.status === 'PENDING');
   const unaRequests = requests.filter(r => r.snapshot && r.snapshot.length > 0).filter(req => unaFilter === 'ALL' || (req.menuPath && req.menuPath.includes(unaFilter)));
+  // [수정] UNA 카운트는 대기(PENDING) 상태만
+  const unaPendingCount = unaRequests.filter(r => r.status === 'PENDING').length;
 
   const displayedBlocks = blocks.filter(block => !hideTargets || !block.isTarget);
 
@@ -1031,8 +1032,8 @@ export default function App() {
           remarks: finalRemarks,
           jira_link: newRequestData.jiraLink,
           status: 'PENDING',
-          // 실제 운영 시 DB 컬럼에 맞게 주석 해제/수정 필요
-          // type: requestType, 
+          // [수정] type 컬럼 주석 해제 (DB insert 시 필요)
+          type: requestType, 
           snapshot_new: null, 
           snapshot_original: null
       }); 
@@ -1042,7 +1043,7 @@ export default function App() {
           window.location.reload(); 
       } else { 
           console.error(error);
-          alert('요청 등록 실패'); 
+          alert('요청 등록 실패: ' + (error.message || '알 수 없는 오류')); // 에러 메시지 상세 출력
       } 
       setModalState({ ...modalState, isOpen: false }); 
   };
@@ -1309,7 +1310,10 @@ export default function App() {
             )}
             <div className="relative">
                 <select value={viewMode} onChange={(e) => { setViewMode(e.target.value); if(e.target.value === 'HISTORY') setModalState({ isOpen: true, type: 'HISTORY_SELECT' }); else if(e.target.value === 'EDITOR') setHistoryDate(''); }} className="bg-[#191b23] border border-[#2e3038] hover:border-[#7387ff] rounded px-3 py-1.5 text-xs font-bold text-white outline-none cursor-pointer appearance-none pr-8">
-                    <option value="EDITOR">에디터</option><option value="REQUEST">UNA ({unaRequests.length})</option><option value="HISTORY">이력</option>
+                    <option value="EDITOR">에디터</option>
+                    {/* [수정] UNA 카운트를 unaPendingCount로 변경 */}
+                    <option value="REQUEST">UNA ({unaPendingCount})</option> 
+                    <option value="HISTORY">이력</option>
                 </select>
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400"><ChevronDown size={12} /></div>
             </div>
@@ -1598,7 +1602,7 @@ export default function App() {
                    <div className="space-y-4">
                       <div><label className="block text-xs font-bold text-slate-500 mb-1">블록명</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-[#7387ff]" value={editIdData.title} onChange={e => setEditIdData({...editIdData, title: e.target.value})} /></div>
                       <div><label className="block text-xs font-bold text-slate-500 mb-1">ID 유형</label><select className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-[#7387ff]" value={editIdData.idType} onChange={e => setEditIdData({...editIdData, idType: e.target.value})}><option value="LIBRARY">라이브러리</option><option value="RACE">RACE</option></select></div>
-                      <div><label className="block text-xs font-bold text-slate-500 mb-1">블록 ID (고유코드)</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white font-mono outline-none focus:border-[#7387ff]" value={editIdData.idValue} onChange={e => setEditIdData({...editIdData, idValue: e.target.value})} autoFocus/></div>
+                      <div><label className="block text-xs font-bold text-slate-500 mb-1">ID 값</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white font-mono outline-none focus:border-[#7387ff]" value={editIdData.idValue} onChange={e => setEditIdData({...editIdData, idValue: e.target.value})} autoFocus/></div>
                       <div className="flex items-center pt-2"><label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-300"><input type="checkbox" checked={editIdData.showTitle} onChange={e => setEditIdData({...editIdData, showTitle: e.target.checked})} className="accent-[#7387ff]" /> 블록명 노출</label></div>
                       <div className="border-t border-[#2e3038] pt-3">
                         <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-300 mb-2"><input type="checkbox" checked={editIdData.isTarget} onChange={e => setEditIdData({...editIdData, isTarget: e.target.checked})} className="accent-pink-500" /> 타겟 설정</label>
