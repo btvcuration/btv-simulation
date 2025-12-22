@@ -14,7 +14,7 @@ import {
 // true: 가짜 데이터 사용 (UI 테스트용)
 // false: 실제 Supabase DB 연동 (상용화용)
 // ==========================================
-const USE_MOCK_DATA = false;
+const USE_MOCK_DATA = true;
 
 // --- Supabase Config ---
 const supabaseUrl = 'https://zzzgixizyafwatdmvuxc.supabase.co';
@@ -743,13 +743,12 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
 
                {/* Bottom Left Title Overlay - [수정] 빅배너 타이틀 제거 및 설명 임의값 */}
                <div className="absolute bottom-4 left-4 z-10">
-                   {block.type !== 'BIG_BANNER' && (
-                       <h3 className="text-white font-extrabold text-2xl drop-shadow-md">
-                           {(block.type === 'TODAY_BTV' ? itemsToRender : filteredBanners)?.[previewIndex]?.title || '타이틀'}
-                       </h3>
-                   )}
+                   {/* 빅배너여도 타이틀은 보여줌 (수정 요청 반영) */}
+                   <h3 className="text-white font-extrabold text-2xl drop-shadow-md">
+                       {(block.type === 'TODAY_BTV' ? itemsToRender : filteredBanners)?.[previewIndex]?.title || '타이틀'}
+                   </h3>
                    {block.type === 'BIG_BANNER' && (
-                       <p className="text-slate-300 text-sm mt-1 line-clamp-2 max-w-[80%] bg-black/30 px-2 py-1 rounded backdrop-blur-sm">소개 문구가 들어가는 영역입니다.</p>
+                       <p className="text-slate-300 text-sm mt-1 line-clamp-2 max-w-[80%] bg-black/30 px-2 py-1 rounded backdrop-blur-sm">소개 문구 영역</p>
                    )}
                </div>
 
@@ -1184,10 +1183,7 @@ export default function App() {
       if (str) { 
           const req = JSON.parse(str); 
           
-          // [수정] Today B tv 배너 추가 로직 (remarks 태그 확인)
-          const isTodayBtvRequest = req.type === 'TODAY_BTV_BANNER' || (req.remarks && req.remarks.includes('[Today B tv]'));
-
-          if (req.type === 'BIG_BANNER' || isTodayBtvRequest) {
+          if (req.type === 'BIG_BANNER' || req.type === 'TODAY_BTV_BANNER') {
               const targetType = req.type === 'BIG_BANNER' ? 'BIG_BANNER' : 'TODAY_BTV';
               const targetBlockIndex = blocks.findIndex(b => b.type === targetType);
               
@@ -1619,9 +1615,7 @@ export default function App() {
                   )}
                   {modalState.type === 'EDIT_BANNER' && (
                     <div className="space-y-4">
-                      {editBannerData.blockId && blocks.find(b => b.id === editBannerData.blockId)?.type === 'BIG_BANNER' && (
-                        <><div><label className="block text-xs font-bold text-slate-500 mb-1">타이틀</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500" value={editBannerData.title} onChange={e => setEditBannerData({...editBannerData, title: e.target.value})} /></div><div><label className="block text-xs font-bold text-slate-500 mb-1">설명</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500" value={editBannerData.desc} onChange={e => setEditBannerData({...editBannerData, desc: e.target.value})} /></div></>
-                      )}
+                      {/* [수정] 빅배너 관련 타이틀, 설명 입력창 제거 */}
                       <div><label className="block text-xs font-bold text-slate-500 mb-1">배너명</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500" value={editBannerData.title} onChange={e => setEditBannerData({...editBannerData, title: e.target.value})} /></div>
                       <div className="flex gap-2 items-end"><div className="flex-1"><label className="block text-xs font-bold text-slate-500 mb-1">이미지 URL</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500" value={editBannerData.img} onChange={e => setEditBannerData({...editBannerData, img: e.target.value})} /></div><label className="cursor-pointer p-2 bg-[#2e3038] hover:bg-[#3e404b] rounded mb-0.5 border border-slate-600"><Upload size={16} className="text-slate-400"/><input type="file" className="hidden" accept="image/*" onChange={(e) => { const file = e.target.files[0]; if(file) setEditBannerData({...editBannerData, img: URL.createObjectURL(file)}); }} /></label></div>
                       <div><label className="block text-xs font-bold text-slate-500 mb-1">이벤트 ID</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500" value={editBannerData.eventId} onChange={e => setEditBannerData({...editBannerData, eventId: e.target.value})} /></div>
