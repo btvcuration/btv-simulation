@@ -14,7 +14,7 @@ import {
 // true: 가짜 데이터 사용 (UI 테스트용)
 // false: 실제 Supabase DB 연동 (상용화용)
 // ==========================================
-const USE_MOCK_DATA = true;
+const USE_MOCK_DATA = false;
 
 // --- Supabase Config ---
 const supabaseUrl = 'https://zzzgixizyafwatdmvuxc.supabase.co';
