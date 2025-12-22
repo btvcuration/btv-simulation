@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  Save, Plus, Trash2, GripVertical, Smartphone, Monitor, 
+  Save, Plus, Trash2, GripVertical, GripHorizontal, Smartphone, Monitor, 
   RefreshCw, ChevronRight, ChevronDown, Layout, Home, Video, 
   Star, Grid, FileText, CheckCircle, Download, ArrowRight, X, ArrowRightLeft,
   Inbox, User, ExternalLink, RotateCcw, Calendar as CalendarIcon, Clock, ChevronLeft, Tv, Film, PlayCircle, BookOpen, MessageSquare, Ban,
   Eye, EyeOff, Database, Layers, Hash, Edit3, AlertTriangle, Link, MousePointer, Image as ImageIcon,
-  MousePointerClick, Tag, PlusCircle, MoreHorizontal, GripHorizontal, Target, StickyNote, Settings, Upload, Link2, Box, Filter,
+  MousePointerClick, Tag, PlusCircle, MoreHorizontal, Target, StickyNote, Settings, Upload, Link2, Box, Filter,
   Menu, History, Rewind, MoreVertical, Minus, Users, Check, XCircle, Send, ArrowRightCircle
 } from 'lucide-react';
 
@@ -74,6 +74,7 @@ const MOCK_BLOCKS = [
     id: 'b1',
     type: 'TODAY_BTV',
     title: 'Today B tv',
+    blockId: 'TD_001',
     showTitle: true,
     items: [
       { id: 'tb1', type: 'BANNER', title: '메인 배너', img: '', isTarget: true },
@@ -86,6 +87,7 @@ const MOCK_BLOCKS = [
     id: 'b2',
     type: 'BIG_BANNER',
     title: '빅배너 영역',
+    blockId: 'BB_001',
     showTitle: true,
     banners: [
       { id: 'bb1', title: '이달의 추천작', desc: '놓치면 후회할 대작들을 만나보세요.', img: '', isTarget: true },
@@ -96,6 +98,7 @@ const MOCK_BLOCKS = [
     id: 'b3',
     type: 'VERTICAL',
     title: '실시간 인기 콘텐츠',
+    blockId: 'RT_001',
     showTitle: true,
     contentIdType: 'RACE',
     contentId: 'RT_POPULAR',
@@ -107,6 +110,7 @@ const MOCK_BLOCKS = [
     id: 'b4',
     type: 'HORIZONTAL',
     title: '주말에 보기 좋은 영화',
+    blockId: 'HZ_001',
     showTitle: true,
     contentIdType: 'LIBRARY',
     contentId: 'NM12345',
@@ -439,6 +443,7 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
   const isToday = block.type === 'TODAY_BTV' || block.type === 'BIG_BANNER'; 
   
   const containerStyle = isOriginal ? 'opacity-60 grayscale border-dashed' : '';
+  // [수정] 드래그 스타일은 상위에서 처리하므로 여기서 제거 혹은 최소화
   const dragStyle = isDragging ? 'border-[#7387ff] shadow-lg scale-[1.02] z-50' : 'border-transparent';
   
   let blockStyle = BLOCK_STYLES.CONTENT;
@@ -582,20 +587,16 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
   }
 
   const getDisplayCount = (type) => {
-    switch(type) {
-      case 'HORIZONTAL': return 2;
-      case 'HORIZONTAL_MINI': return 4;
-      case 'VERTICAL': return 4;
-      default: return 4;
-    }
+      return 3; // [수정] 일괄 3개 표시
   };
   const displayCount = getDisplayCount(block.type);
 
   // --- Sub-renderers ---
   const PosterItem = ({ type, text, isBanner, bannerType, img, onClick, onDragStart, onDragEnter, onDrop, draggable, isTarget, jiraLink, isSelected }) => {
     let sizeClass = "w-24 h-36"; 
-    let bgClass = "bg-slate-800";
-    let textClass = "text-slate-600";
+    // [수정] 배경색 밝게 변경 (bg-slate-800 -> bg-slate-700)
+    let bgClass = "bg-slate-700";
+    let textClass = "text-slate-500";
     if (type === 'HORIZONTAL') sizeClass = "w-[200px] h-36";
     if (type === 'HORIZONTAL_MINI') sizeClass = "w-24 h-16";
     if (isBanner) {
@@ -611,6 +612,7 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
         bgClass = `${CONTENT_STYLE.bg} ${CONTENT_STYLE.border} ${CONTENT_STYLE.hover} cursor-pointer`;
         textClass = CONTENT_STYLE.text;
     }
+    // [수정] 이미지 체크 로직 완화
     const hasImage = img && img.length > 0;
     const displayText = typeof text === 'string' ? text : 'Content';
 
@@ -638,7 +640,6 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
 
   const currentIdType = block.type === 'TAB' && block.tabs && block.tabs[activeTab] ? block.tabs[activeTab]?.contentIdType : block.contentIdType;
   const currentIdValue = block.type === 'TAB' && block.tabs && block.tabs[activeTab] ? block.tabs[activeTab]?.contentId : block.contentId;
-  // [수정] Target 필터링 적용
   const itemsToRender = (Array.isArray(block.items) ? block.items : []).filter(item => !hideTargets || !item.isTarget);
   const tabsToRender = (Array.isArray(block.tabs) ? block.tabs : []).map(tab => ({
       ...tab,
@@ -653,11 +654,19 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
   const canEditId = !readOnly;
 
   return (
-    <div className={`p-4 rounded-lg border ${blockStyle.border} ${blockStyle.bg} ${containerStyle} ${dragStyle} relative transition-colors`}>
+    <div className={`p-4 rounded-lg border ${blockStyle.border} ${blockStyle.bg} ${containerStyle} ${dragStyle} relative transition-colors pt-6`}>
+      {/* [수정] 드래그 핸들 (블록 상단) */}
+      {!readOnly && !isOriginal && (
+         <div className="absolute top-0 left-0 right-0 h-4 flex justify-center items-center cursor-grab active:cursor-grabbing hover:bg-white/10 rounded-t-lg group/handle">
+             <div className="w-10 h-1 bg-slate-600 rounded-full group-hover/handle:bg-slate-400"></div>
+         </div>
+      )}
+
       <div className="flex justify-between items-start mb-3">
         <div className="flex flex-col gap-1">
           <div className={`flex items-center gap-2 ${block.showTitle === false ? 'opacity-50' : ''}`}>
             <h3 className={`text-sm font-bold truncate ${isMulti ? 'text-purple-300' : 'text-slate-200'}`}>{block.title || 'Untitled Block'}</h3>
+            {/* [수정] 블록 ID 항상 표시 */}
             {block.blockId && <span className="text-[10px] bg-slate-700 text-slate-300 px-1 rounded font-mono">{block.blockId}</span>}
             {block.isNew && <span className="text-[10px] bg-red-500 text-white px-1 rounded">NEW</span>}
             {block.isTarget && <span className="text-[10px] bg-pink-600 text-white px-1 rounded flex items-center gap-0.5 font-bold"><Target size={8}/> TARGET</span>}
@@ -733,13 +742,15 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
                    </div>
                )}
 
-               {/* Bottom Left Title Overlay */}
+               {/* Bottom Left Title Overlay - [수정] 빅배너 타이틀 제거 및 설명 임의값 */}
                <div className="absolute bottom-4 left-4 z-10">
-                   <h3 className="text-white font-extrabold text-2xl drop-shadow-md">
-                       {(block.type === 'TODAY_BTV' ? itemsToRender : filteredBanners)?.[previewIndex]?.title || '타이틀'}
-                   </h3>
-                   {block.type === 'BIG_BANNER' && (filteredBanners?.[previewIndex]?.desc) && (
-                       <p className="text-slate-300 text-sm mt-1 line-clamp-2 max-w-[80%]">{(filteredBanners?.[previewIndex]?.desc)}</p>
+                   {block.type !== 'BIG_BANNER' && (
+                       <h3 className="text-white font-extrabold text-2xl drop-shadow-md">
+                           {(block.type === 'TODAY_BTV' ? itemsToRender : filteredBanners)?.[previewIndex]?.title || '타이틀'}
+                       </h3>
+                   )}
+                   {block.type === 'BIG_BANNER' && (
+                       <p className="text-slate-300 text-sm mt-1 line-clamp-2 max-w-[80%] bg-black/30 px-2 py-1 rounded backdrop-blur-sm">소개 문구가 들어가는 영역입니다.</p>
                    )}
                </div>
 
@@ -871,7 +882,7 @@ export default function App() {
   const [showInbox, setShowInbox] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
-  const [hideTargets, setHideTargets] = useState(false); // [추가] Target 제외 보기 상태
+  const [hideTargets, setHideTargets] = useState(false); 
   const [supabase, setSupabase] = useState(USE_MOCK_DATA ? mockSupabase : null);
 
   useEffect(() => {
@@ -924,7 +935,6 @@ export default function App() {
   const inboxRequests = requests.filter(r => !r.snapshot || r.snapshot.length === 0).filter(req => inboxFilter === 'ALL' || req.gnb === inboxFilter).filter(r => r.status === 'PENDING');
   const unaRequests = requests.filter(r => r.snapshot && r.snapshot.length > 0).filter(req => unaFilter === 'ALL' || (req.menuPath && req.menuPath.includes(unaFilter)));
 
-  // [추가] Target 필터링된 블록 목록
   const displayedBlocks = blocks.filter(block => !hideTargets || !block.isTarget);
 
   const generateDiffs = () => {
@@ -952,7 +962,7 @@ export default function App() {
 
   const confirmAddBlock = () => {
     if (!newBlockData.title) return alert('블록 타이틀을 입력해주세요.');
-    let newBlock = { id: `new-${Date.now()}`, title: newBlockData.title, isNew: true, remarks: newBlockData.remarks, isTarget: newBlockData.isTarget, targetSeg: newBlockData.targetSeg, type: newBlockData.type, showTitle: newBlockData.showTitle };
+    let newBlock = { id: `new-${Date.now()}`, title: newBlockData.title, isNew: true, remarks: newBlockData.remarks, isTarget: newBlockData.isTarget, targetSeg: newBlockData.targetSeg, type: newBlockData.type, showTitle: newBlockData.showTitle, blockId: newBlockData.contentId }; // [수정] ID 추가
      if (blockCategory === 'BANNER') {
        newBlock.type = newBlockData.type;
        newBlock.banners = [{ id: `bn-${Date.now()}`, title: newBlockData.bannerTitle || '배너', type: newBlockData.type === 'BANNER_1' ? '1-COL' : newBlockData.type === 'BANNER_2' ? '2-COL' : '3-COL' }];
@@ -977,7 +987,7 @@ export default function App() {
   const handleRejectRequest = async (id, e) => { e.stopPropagation(); if(window.confirm('거절하시겠습니까?')) { await supabase.from('requests').update({status: 'REJECTED'}).eq('id', id); setRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'REJECTED' } : r)); } };
   
   const openEditIdModal = (block, tabIndex) => { let cType, cVal, cTarget, cSeg, cRemark; if (block.type === 'TAB' && tabIndex !== null && block.tabs[tabIndex]) { cType = block.tabs[tabIndex].contentIdType; cVal = block.tabs[tabIndex].contentId; } else { cType = block.contentIdType; cVal = block.contentId; cTarget = block.isTarget; cSeg = block.targetSeg; cRemark = block.remarks; } setEditIdData({ blockId: block.id, tabIndex, idType: cType, idValue: cVal, isTarget: cTarget || false, targetSeg: cSeg || '', remarks: cRemark || '', title: block.title || '', showTitle: block.showTitle !== false }); setModalState({ isOpen: true, type: 'EDIT_ID', data: null }); };
-  const saveEditedId = () => { const { blockId, tabIndex, idType, idValue, isTarget, targetSeg, remarks, title, showTitle } = editIdData; const block = blocks.find(b => b.id === blockId); if (!block) return; let updates = { title, showTitle }; if (block.type === 'TAB' && tabIndex !== null) { const newTabs = [...block.tabs]; newTabs[tabIndex] = { ...newTabs[tabIndex], contentIdType: idType, contentId: idValue }; updates.tabs = newTabs; } else { updates = { ...updates, contentIdType: idType, contentId: idValue, isTarget, targetSeg, remarks }; } handleUpdateBlock(blockId, updates); setModalState({ ...modalState, isOpen: false }); };
+  const saveEditedId = () => { const { blockId, tabIndex, idType, idValue, isTarget, targetSeg, remarks, title, showTitle } = editIdData; const block = blocks.find(b => b.id === blockId); if (!block) return; let updates = { title, showTitle }; if (block.type === 'TAB' && tabIndex !== null) { const newTabs = [...block.tabs]; newTabs[tabIndex] = { ...newTabs[tabIndex], contentIdType: idType, contentId: idValue }; updates.tabs = newTabs; } else { updates = { ...updates, contentIdType: idType, contentId: idValue, isTarget, targetSeg, remarks, blockId: idValue }; } handleUpdateBlock(blockId, updates); setModalState({ ...modalState, isOpen: false }); };
   const handleBannerEdit = (block, bannerData, bannerIndex, isLeading, tabIndex = null) => { setEditBannerData({ blockId: block.id, isLeading, bannerIndex, tabIndex, landingType: bannerData.landingType || '', landingValue: bannerData.landingValue || '', img: bannerData.img || '', eventId: bannerData.eventId || '', jiraLink: bannerData.jiraLink || '', isTarget: bannerData.isTarget || false, targetSeg: bannerData.targetSeg || '', remarks: bannerData.remarks || '', title: bannerData.title || '', desc: bannerData.desc || '' }); setModalState({ isOpen: true, type: 'EDIT_BANNER', data: null }); };
   const saveEditedBanner = () => { const { blockId, isLeading, bannerIndex, tabIndex, landingType, landingValue, img, eventId, jiraLink, isTarget, targetSeg, remarks, title, desc } = editBannerData; setBlocks(prev => prev.map(b => { if (b.id !== blockId) return b; const newBlock = { ...b }; const newBannerData = { landingType, landingValue, img, eventId, jiraLink, isTarget, targetSeg, remarks, title, desc }; if (b.type === 'TAB' && tabIndex !== null) { const newTabs = [...b.tabs]; if (isLeading) { const currentTab = newTabs[tabIndex]; const newLeadingBanners = [...(currentTab.leadingBanners || [])]; if (newLeadingBanners[bannerIndex]) { newLeadingBanners[bannerIndex] = { ...newLeadingBanners[bannerIndex], ...newBannerData }; } newTabs[tabIndex] = { ...currentTab, leadingBanners: newLeadingBanners }; } newBlock.tabs = newTabs; } else if (isLeading) { const newLeadingBanners = [...(newBlock.leadingBanners || [])]; if (newLeadingBanners[bannerIndex]) { newLeadingBanners[bannerIndex] = { ...newLeadingBanners[bannerIndex], ...newBannerData }; } newBlock.leadingBanners = newLeadingBanners; } else if (newBlock.type === 'TODAY_BTV') { const newItems = [...(newBlock.items || [])]; if(newItems[bannerIndex]) { newItems[bannerIndex] = { ...newItems[bannerIndex], ...newBannerData }; } newBlock.items = newItems; } else if (newBlock.banners) { const newBanners = [...newBlock.banners]; if (newBanners[bannerIndex]) { newBanners[bannerIndex] = { ...newBanners[bannerIndex], ...newBannerData }; } newBlock.banners = newBanners; } else if (newBlock.banner) { newBlock.banner = { ...newBlock.banner, ...newBannerData }; } return newBlock; })); setModalState({ ...modalState, isOpen: false }); };
   const handleEditContent = (blockId, itemIndex, currentData) => { setEditContentData({ blockId, itemIndex, title: currentData.title || '', seriesId: currentData.seriesId || '', img: currentData.img || '' }); setModalState({ isOpen: true, type: 'EDIT_CONTENT', data: null }); };
@@ -992,13 +1002,13 @@ export default function App() {
   const handleCreateRequest = async () => { 
       if (!newRequestData.headline || !newRequestData.requester) return alert('요청자 및 제목을 입력해주세요.'); 
       
-      // [수정] Today B tv 배너 요청 시 타입 치환 및 태그 추가 (DB 제약 우회)
       let requestType = newRequestData.type;
       let finalRemarks = newRequestData.remarks;
       
+      // [수정] 요청 타입 치환 (DB 제약조건 회피 및 블록 타입 통일)
       if (requestType === 'TODAY_BTV_BANNER') {
-          requestType = 'BIG_BANNER'; // DB 허용 타입으로 변경
-          finalRemarks = `[Today B tv] ${finalRemarks || ''}`; // 태그 추가
+          requestType = 'BIG_BANNER'; 
+          finalRemarks = `[Today B tv] ${finalRemarks || ''}`;
       }
 
       if (USE_MOCK_DATA) { 
@@ -1021,9 +1031,8 @@ export default function App() {
           remarks: finalRemarks,
           jira_link: newRequestData.jiraLink,
           status: 'PENDING',
-          // type 컬럼이 없어서 생략 (필요하다면 추가)
-          // DB 스키마에 type 컬럼이 있다면 아래 주석 해제
-          // type: requestType,
+          // 실제 운영 시 DB 컬럼에 맞게 주석 해제/수정 필요
+          // type: requestType, 
           snapshot_new: null, 
           snapshot_original: null
       }); 
@@ -1195,7 +1204,6 @@ export default function App() {
                   targetBlock.banners = newBanners;
               } else {
                   const newItems = [...(targetBlock.items || [])];
-                  // Today B tv 배너는 BANNER 타입으로 추가
                   newItems.unshift({ id: `req-tb-${Date.now()}`, type: 'BANNER', title: req.title, isTarget: false, isNew: true });
                   targetBlock.items = newItems;
               }
@@ -1548,7 +1556,8 @@ export default function App() {
                            </div>
                            <div className="grid grid-cols-3 gap-2">
                              <div className="col-span-1"><label className="block text-xs font-bold text-slate-500 mb-1">ID 유형</label><select className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none" value={newBlockData.contentIdType} onChange={e => setNewBlockData({...newBlockData, contentIdType: e.target.value})}><option value="LIBRARY">라이브러리</option><option value="RACE">RACE</option></select></div>
-                             <div className="col-span-2"><label className="block text-xs font-bold text-slate-500 mb-1">ID값</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none font-mono" value={newBlockData.contentId} onChange={e => setNewBlockData({...newBlockData, contentId: e.target.value})} placeholder={newBlockData.contentIdType === 'LIBRARY' ? 'NB...' : '...RACE'}/></div>
+                             {/* [수정] ID 입력 필드명 명확화 */}
+                             <div className="col-span-2"><label className="block text-xs font-bold text-slate-500 mb-1">ID값 (블록 ID)</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none font-mono" value={newBlockData.contentId} onChange={e => setNewBlockData({...newBlockData, contentId: e.target.value})} placeholder="예: TD_002"/></div>
                            </div>
                            <div className="bg-[#100d1d] p-3 rounded border border-[#2e3038] space-y-2">
                              <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-300"><input type="checkbox" checked={newBlockData.useLeadingBanner} onChange={e => setNewBlockData({...newBlockData, useLeadingBanner: e.target.checked})} className="accent-[#7387ff]" />앞단 배너 추가</label>
@@ -1589,7 +1598,7 @@ export default function App() {
                    <div className="space-y-4">
                       <div><label className="block text-xs font-bold text-slate-500 mb-1">블록명</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-[#7387ff]" value={editIdData.title} onChange={e => setEditIdData({...editIdData, title: e.target.value})} /></div>
                       <div><label className="block text-xs font-bold text-slate-500 mb-1">ID 유형</label><select className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-[#7387ff]" value={editIdData.idType} onChange={e => setEditIdData({...editIdData, idType: e.target.value})}><option value="LIBRARY">라이브러리</option><option value="RACE">RACE</option></select></div>
-                      <div><label className="block text-xs font-bold text-slate-500 mb-1">ID 값</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white font-mono outline-none focus:border-[#7387ff]" value={editIdData.idValue} onChange={e => setEditIdData({...editIdData, idValue: e.target.value})} autoFocus/></div>
+                      <div><label className="block text-xs font-bold text-slate-500 mb-1">블록 ID (고유코드)</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white font-mono outline-none focus:border-[#7387ff]" value={editIdData.idValue} onChange={e => setEditIdData({...editIdData, idValue: e.target.value})} autoFocus/></div>
                       <div className="flex items-center pt-2"><label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-300"><input type="checkbox" checked={editIdData.showTitle} onChange={e => setEditIdData({...editIdData, showTitle: e.target.checked})} className="accent-[#7387ff]" /> 블록명 노출</label></div>
                       <div className="border-t border-[#2e3038] pt-3">
                         <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-300 mb-2"><input type="checkbox" checked={editIdData.isTarget} onChange={e => setEditIdData({...editIdData, isTarget: e.target.checked})} className="accent-pink-500" /> 타겟 설정</label>
