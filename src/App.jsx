@@ -959,6 +959,10 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   const [isViewFilterOpen, setIsViewFilterOpen] = useState(false); 
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false); // 메인 이력 화면(리스트+비교) 노출 여부
+  const [isCalendarPopupOpen, setIsCalendarPopupOpen] = useState(false); // 1차 진입 시 뜨는 '달력 팝업' 노출 여부
+  const [historySelectedDate, setHistorySelectedDate] = useState(new Date().toISOString().split('T')[0]); // 선택된 날짜
+  const [historyDetailReq, setHistoryDetailReq] = useState(null); // 상세 비교할 데이터
   
   // [NEW] 통합 뷰 옵션
   const [viewOptions, setViewOptions] = useState({
@@ -1692,10 +1696,27 @@ export default function App() {
               </div>
             )}
             <div className="relative">
-              <select value={viewMode} onChange={(e) => { setViewMode(e.target.value); if (e.target.value === 'HISTORY') setModalState({ isOpen: true, type: 'HISTORY_SELECT' }); else if (e.target.value === 'EDITOR') setHistoryDate(''); }} className="bg-[#191b23] border border-[#2e3038] hover:border-[#7387ff] rounded px-3 py-1.5 text-xs font-bold text-white outline-none cursor-pointer appearance-none pr-8">
+              <select 
+                value={viewMode} 
+                onChange={(e) => { 
+                  const selected = e.target.value;
+                  
+                  // [변경됨] HISTORY 선택 시 뷰를 이동하지 않고 달력 팝업만 오픈
+                  if (selected === 'HISTORY') {
+                    setIsCalendarPopupOpen(true);
+                    // 뷰 모드는 변경하지 않음 (return)
+                  } else {
+                    // 그 외(EDITOR, REQUEST)는 페이지 이동
+                    setViewMode(selected);
+                    // 기존 로직 유지 (에디터로 돌아올 때 날짜 초기화 등)
+                    if (selected === 'EDITOR') setHistoryDate(''); 
+                  }
+                }} 
+                className="bg-[#191b23] border border-[#2e3038] hover:border-[#7387ff] rounded px-3 py-1.5 text-xs font-bold text-white outline-none cursor-pointer appearance-none pr-8"
+              >
                 <option value="EDITOR">에디터</option>
                 <option value="REQUEST">UNA ({unaPendingCount})</option>
-                <option value="HISTORY">이력</option>
+                <option value="HISTORY">이력 (History)</option>
               </select>
               <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400"><ChevronDown size={12} /></div>
             </div>
@@ -1853,7 +1874,6 @@ export default function App() {
           </div>
         )}
 
-        {/* Modal */}
         {/* Modal */}
         {modalState.isOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
@@ -2127,6 +2147,195 @@ export default function App() {
                   </>
                 ) : modalState.type !== 'EDIT_TAB_NAME' && modalState.type !== 'EDIT_CONTENT' && modalState.type !== 'HISTORY_SELECT' && <button onClick={modalState.type === 'NEW_REQUEST' ? handleCreateRequest : modalState.type === 'ADD_BLOCK' ? confirmAddBlock : modalState.type === 'EDIT_ID' ? saveEditedId : modalState.type === 'EDIT_BANNER' ? saveEditedBanner : modalState.type === 'ADD_GNB' || modalState.type === 'ADD_SUBMENU' ? handleAddMenu : handleConfirmAction} className={`px-6 py-2 rounded text-white text-xs font-bold shadow-lg ${modalState.type === 'DELETE_BANNER_CONFIRM' || modalState.type === 'DELETE_REQUEST' ? 'bg-red-600 hover:bg-red-500' : modalState.type === 'EDIT_BANNER' || (modalState.type === 'ADD_BLOCK' && blockCategory === 'BANNER') ? 'bg-orange-600 hover:bg-orange-500' : 'bg-[#7387ff] hover:bg-[#5b6dbf]'}`}>{modalState.type === 'DELETE_BANNER_CONFIRM' || modalState.type === 'DELETE_REQUEST' ? '삭제 확인' : '확인'}</button>}
                 {modalState.type === 'HISTORY_SELECT' && <button onClick={() => setModalState({ ...modalState, isOpen: false })} className="px-4 py-2 rounded text-slate-400 text-xs font-bold hover:bg-[#2e3038]">닫기</button>}
+              </div>
+            </div>
+          </div>
+        )}
+        {/* ===================================================================================== */}
+        {/* 3단계: 이력 UI 컴포넌트 (달력 팝업 + 메인 모달) */}
+        {/* 이 코드를 </main> 태그 바로 위에 붙여넣으세요. */}
+        {/* ===================================================================================== */}
+  
+        {/* 1. [진입 단계] 날짜 선택 팝업 (Select에서 '이력' 선택 시 가장 먼저 뜸) */}
+        {isCalendarPopupOpen && (
+          <div className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-[2px] flex items-center justify-center animate-in fade-in duration-200">
+            <div className="bg-[#191b23] border border-[#2e3038] rounded-xl shadow-2xl p-6 w-[340px] flex flex-col items-center">
+              <h3 className="text-lg font-bold text-white mb-1">이력 조회 날짜 선택</h3>
+              <p className="text-xs text-slate-400 mb-4">조회하고 싶은 과거 날짜를 선택해주세요.</p>
+              
+              {/* 달력 컨트롤러 */}
+              <div className="w-full bg-[#100d1d] rounded-lg p-4 mb-4 border border-[#2e3038]">
+                 <div className="flex justify-between items-center mb-4">
+                   <button onClick={handlePrevMonth} className="p-1 hover:bg-[#2e3038] rounded text-slate-400"><ChevronLeft size={16}/></button>
+                   <span className="text-sm font-bold text-white">{currentCalendarDate.getFullYear()}.{String(currentCalendarDate.getMonth() + 1).padStart(2,'0')}</span>
+                   <button onClick={handleNextMonth} className="p-1 hover:bg-[#2e3038] rounded text-slate-400"><ChevronRight size={16}/></button>
+                 </div>
+                 
+                 {/* 요일 헤더 */}
+                 <div className="grid grid-cols-7 gap-1 text-center mb-2">
+                   {['일','월','화','수','목','금','토'].map(d => <span key={d} className="text-[10px] text-slate-500">{d}</span>)}
+                 </div>
+  
+                 {/* 날짜 그리드 */}
+                 <div className="grid grid-cols-7 gap-1">
+                   {(() => {
+                      const daysInMonth = getDaysInMonth(currentCalendarDate);
+                      const firstDay = getFirstDayOfMonth(currentCalendarDate);
+                      const days = [];
+                      // 빈 칸 채우기
+                      for (let i = 0; i < firstDay; i++) days.push(<div key={`empty-${i}`} className="h-8"></div>);
+                      
+                      // 날짜 채우기
+                      for (let d = 1; d <= daysInMonth; d++) {
+                        const year = currentCalendarDate.getFullYear();
+                        const month = currentCalendarDate.getMonth() + 1;
+                        const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                        
+                        // 해당 날짜에 데이터가 있는지 확인 (Mock 모드 등 고려)
+                        const hasHistory = requests.some(r => r.status === 'APPROVED' && (r.date === dateStr || r.created_at?.startsWith(dateStr)));
+                        
+                        days.push(
+                          <button 
+                            key={d} 
+                            onClick={() => { 
+                              // [핵심 로직] 날짜 클릭 시 -> 팝업 닫고 -> 메인 모달 열기
+                              setHistorySelectedDate(dateStr); 
+                              setIsCalendarPopupOpen(false); 
+                              setIsHistoryModalOpen(true);
+                              setHistoryDetailReq(null);
+                            }}
+                            className={`h-8 rounded text-xs flex items-center justify-center hover:bg-[#2e3038] transition-colors ${hasHistory ? 'bg-[#7387ff]/20 text-[#7387ff] font-bold border border-[#7387ff]/50' : 'text-slate-400'}`}
+                          >
+                            {d}
+                          </button>
+                        );
+                      }
+                      return days;
+                   })()}
+                 </div>
+              </div>
+  
+              <button 
+                onClick={() => setIsCalendarPopupOpen(false)} // 취소 시 팝업만 닫힘
+                className="text-xs text-slate-500 hover:text-white underline decoration-slate-600 underline-offset-4"
+              >
+                취소하고 돌아가기
+              </button>
+            </div>
+          </div>
+        )}
+  
+        {/* 2. [메인 단계] 이력 관리 모달 (날짜 선택 후에만 뜸) */}
+        {isHistoryModalOpen && (
+          <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-200">
+            <div className="bg-[#161820] w-full h-full max-w-[1600px] rounded-xl border border-[#2e3038] shadow-2xl flex flex-col overflow-hidden relative">
+              
+              {/* 상단 헤더 */}
+              <div className="h-14 border-b border-[#2e3038] flex items-center justify-between px-5 bg-[#191b23] shrink-0">
+                <div className="flex items-center gap-4">
+                  <h2 className="text-base font-bold text-white flex items-center gap-2">
+                    <History className="text-[#7387ff]" size={18} /> 이력 관리 (History)
+                  </h2>
+                  <div className="h-4 w-px bg-[#44464f]"></div>
+                  
+                  {/* 현재 선택된 날짜 (클릭 시 다시 달력 팝업으로 이동) */}
+                  <button 
+                    onClick={() => { setIsHistoryModalOpen(false); setIsCalendarPopupOpen(true); }}
+                    className="flex items-center gap-2 text-sm text-white bg-[#100d1d] border border-[#2e3038] px-3 py-1.5 rounded hover:border-[#7387ff] transition-colors"
+                  >
+                    <CalendarIcon size={14} className="text-slate-400"/> 
+                    <span className="font-mono font-bold">{historySelectedDate}</span>
+                    <span className="text-[10px] text-slate-500 ml-1 hover:text-[#7387ff]">(날짜 변경)</span>
+                  </button>
+                </div>
+                <button onClick={() => setIsHistoryModalOpen(false)} className="p-2 hover:bg-[#2e3038] rounded-full text-slate-400 hover:text-white"><X size={20} /></button>
+              </div>
+  
+              <div className="flex-1 flex overflow-hidden">
+                {/* 좌측: 리스트 영역 */}
+                <div className="w-80 border-r border-[#2e3038] bg-[#100d1d] flex flex-col">
+                  <div className="p-4 border-b border-[#2e3038] bg-[#161820]">
+                    <h3 className="text-xs font-bold text-slate-400 mb-1">UNA 편성반영 내역</h3>
+                    <div className="text-[10px] text-slate-500">선택한 날짜의 반영 완료 건만 표시</div>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                    {(() => {
+                      const dailyHistory = requests.filter(r => {
+                         const rDate = r.created_at ? r.created_at.split('T')[0] : r.date;
+                         const statusCheck = USE_MOCK_DATA ? true : r.status === 'APPROVED';
+                         return rDate === historySelectedDate && statusCheck;
+                      });
+                      if (dailyHistory.length === 0) return <div className="text-center py-10 text-slate-500 text-xs">내역이 없습니다.</div>;
+  
+                      return dailyHistory.map(req => (
+                        <div 
+                          key={req.id} 
+                          onClick={() => setHistoryDetailReq(req)}
+                          className={`p-3 rounded border cursor-pointer transition-all ${historyDetailReq?.id === req.id ? 'bg-[#7387ff]/10 border-[#7387ff]' : 'bg-[#191b23] border-[#2e3038] hover:border-slate-500'}`}
+                        >
+                           <div className="flex justify-between items-center mb-1">
+                             <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${req.status === 'APPROVED' ? 'bg-green-900/30 text-green-500' : 'bg-slate-700 text-slate-400'}`}>{req.status}</span>
+                             <span className="text-[10px] text-slate-500">{req.createdAt ? req.createdAt.split(' ')[1] : ''}</span>
+                           </div>
+                           <div className="text-sm font-bold text-slate-200 mb-1 line-clamp-2">{req.title}</div>
+                           <div className="text-[10px] text-slate-500 flex items-center gap-2">
+                              <span>{req.requester}</span>
+                              <span className="w-px h-2 bg-slate-700"></span>
+                              <span>{req.gnb}</span>
+                           </div>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                </div>
+  
+                {/* 우측: 상세 비교 (Diff View) 영역 */}
+                <div className="flex-1 bg-[#0a0812] overflow-hidden flex flex-col">
+                  {historyDetailReq ? (
+                    <>
+                       <div className="p-3 border-b border-[#2e3038] bg-[#191b23] flex justify-between items-center shadow-md z-10">
+                          <div className="flex items-center gap-2">
+                               <h3 className="text-sm font-bold text-white">{historyDetailReq.title}</h3>
+                               <span className="text-[10px] text-slate-400 px-1.5 border border-[#2e3038] rounded">ID: {historyDetailReq.id}</span>
+                          </div>
+                          <div className="flex items-center gap-4 text-xs font-bold">
+                             <span className="flex items-center gap-1 text-orange-400"><div className="w-2 h-2 bg-orange-500 rounded-full"></div> 변경 전</span>
+                             <ArrowRight size={12} className="text-slate-600"/>
+                             <span className="flex items-center gap-1 text-[#7387ff]"><div className="w-2 h-2 bg-[#7387ff] rounded-full"></div> 변경 후</span>
+                          </div>
+                       </div>
+                       <div className="flex-1 overflow-y-auto p-4">
+                          <div className="grid grid-cols-2 gap-4 min-h-full">
+                             {/* Before */}
+                             <div className="border border-[#2e3038] rounded bg-[#100d1d] p-3">
+                                {historyDetailReq.originalSnapshot ? (
+                                  historyDetailReq.originalSnapshot.map((block, idx) => (
+                                    <div key={`h-old-${idx}`} className="mb-4 opacity-70 grayscale-[0.3] pointer-events-none">
+                                      <BlockRenderer block={block} isOriginal={true} readOnly={true} />
+                                    </div>
+                                  ))
+                                ) : <div className="text-slate-500 text-center py-20 text-xs">이전 데이터 없음</div>}
+                             </div>
+                             {/* After */}
+                             <div className="border border-[#7387ff]/30 rounded bg-[#100d1d] p-3 shadow-[0_0_20px_rgba(115,135,255,0.05)]">
+                                {historyDetailReq.snapshot ? (
+                                  historyDetailReq.snapshot.map((block, idx) => (
+                                    <div key={`h-new-${idx}`} className="mb-4 pointer-events-none">
+                                      <BlockRenderer block={block} isOriginal={false} readOnly={true} />
+                                    </div>
+                                  ))
+                                ) : <div className="text-slate-500 text-center py-20 text-xs">데이터 없음</div>}
+                             </div>
+                          </div>
+                       </div>
+                    </>
+                  ) : (
+                    <div className="flex-1 flex flex-col items-center justify-center text-slate-600 gap-2">
+                      <History size={40} className="opacity-20"/>
+                      <p className="text-sm">좌측 리스트에서 상세 내역을 선택해주세요.</p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
