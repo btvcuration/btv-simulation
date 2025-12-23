@@ -1738,30 +1738,40 @@ export default function App() {
               </div>
               <div className="p-6 overflow-y-auto flex-1">
                   {/* ... (기존 모달 내용) ... */}
-                  {/* [수정] UNA 상세 비교 화면 구현 */}
+                  {/* [수정] UNA 상세 비교 화면: 통합 스크롤 적용 */}
                   {modalState.type === 'VIEW_UNA_DETAIL' && modalState.data && (
-                      <div className="h-full flex flex-col gap-4">
-                          <div className="flex gap-4 h-full overflow-hidden">
-                              {/* Before */}
-                              <div className="flex-1 flex flex-col overflow-hidden border border-[#2e3038] rounded-lg bg-[#100d1d]">
-                                  <div className="p-3 bg-[#1e2029] border-b border-orange-500/30 flex justify-between items-center shrink-0">
+                      <div className="h-full flex flex-col gap-4 overflow-hidden"> 
+                          {/* 1. 상단 비교 영역 (통합 스크롤 적용) */}
+                          <div className="flex gap-4 flex-1 overflow-y-auto pr-1 relative"> {/* pr-1은 스크롤바 공간 확보 */}
+                              
+                              {/* Before Column (왼쪽) */}
+                              <div className="flex-1 flex flex-col border border-[#2e3038] rounded-lg bg-[#100d1d] h-fit min-h-full">
+                                  {/* Header: Sticky로 고정 */}
+                                  <div className="sticky top-0 z-20 p-3 bg-[#1e2029] border-b border-orange-500/30 flex justify-between items-center shadow-lg">
                                       <span className="text-orange-400 font-bold text-sm">변경 전 (Original)</span>
                                   </div>
-                                  <div className="flex-1 overflow-y-auto p-4 space-y-3 opacity-80 grayscale-[0.3]">
+                                  {/* Content: 스크롤 제거 (부모 스크롤을 따름) */}
+                                  <div className="p-4 space-y-3 opacity-80 grayscale-[0.3]">
                                       {modalState.data.originalSnapshot && modalState.data.originalSnapshot.map((block, idx) => (
                                           <div key={`prev-${idx}`} className="relative">
                                               <div className="absolute -left-2 top-2 z-10 w-5 h-5 bg-slate-700 text-slate-400 rounded-full flex items-center justify-center text-xs font-mono">{idx + 1}</div>
                                               <BlockRenderer block={block} isOriginal={true} readOnly={true} />
                                           </div>
                                       ))}
+                                      {(!modalState.data.originalSnapshot || modalState.data.originalSnapshot.length === 0) && (
+                                           <div className="text-slate-500 text-center py-10 text-xs">데이터 없음</div>
+                                      )}
                                   </div>
                               </div>
-                              {/* After */}
-                              <div className="flex-1 flex flex-col overflow-hidden border border-[#7387ff]/50 rounded-lg bg-[#100d1d]">
-                                  <div className="p-3 bg-[#1e2029] border-b border-[#7387ff]/50 flex justify-between items-center shrink-0">
+                  
+                              {/* After Column (오른쪽) */}
+                              <div className="flex-1 flex flex-col border border-[#7387ff]/50 rounded-lg bg-[#100d1d] h-fit min-h-full">
+                                  {/* Header: Sticky로 고정 */}
+                                  <div className="sticky top-0 z-20 p-3 bg-[#1e2029] border-b border-[#7387ff]/50 flex justify-between items-center shadow-lg">
                                       <span className="text-[#7387ff] font-bold text-sm">변경 후 (New)</span>
                                   </div>
-                                  <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                                  {/* Content: 스크롤 제거 */}
+                                  <div className="p-4 space-y-3">
                                       {modalState.data.snapshot && modalState.data.snapshot.map((block, idx) => (
                                           <div key={`new-${idx}`} className="relative">
                                               <div className="absolute -left-2 top-2 z-10 w-5 h-5 bg-[#7387ff] text-white rounded-full flex items-center justify-center text-xs font-mono font-bold shadow-lg">{idx + 1}</div>
@@ -1771,14 +1781,17 @@ export default function App() {
                                   </div>
                               </div>
                           </div>
-                          <div className="bg-[#191b23] p-4 rounded-lg border border-[#2e3038] shrink-0">
+                  
+                          {/* 2. 하단 변경 내역 요약 (고정 영역) */}
+                          <div className="bg-[#191b23] p-4 rounded-lg border border-[#2e3038] shrink-0 z-30">
                               <h4 className="text-sm font-bold text-white mb-2">변경 내역 상세</h4>
                               {modalState.data.changes && modalState.data.changes.length > 0 ? (
-                                  <ul className="space-y-1">
+                                  <ul className="space-y-1 max-h-[100px] overflow-y-auto custom-scrollbar">
                                       {modalState.data.changes.map((change, idx) => (
                                           <li key={idx} className="text-xs text-slate-300 flex items-center gap-2">
                                               <span className={`w-1.5 h-1.5 rounded-full ${change.type === '신규' ? 'bg-blue-400' : change.type === '삭제' ? 'bg-red-400' : 'bg-orange-400'}`}></span>
-                                              [{change.type}] {change.desc}
+                                              <span className={`font-bold ${change.type === '신규' ? 'text-blue-400' : change.type === '삭제' ? 'text-red-400' : 'text-orange-400'}`}>[{change.type}]</span> 
+                                              {change.desc}
                                           </li>
                                       ))}
                                   </ul>
