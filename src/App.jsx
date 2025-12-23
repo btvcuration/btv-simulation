@@ -671,7 +671,7 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
   const filteredBanners = (block.banners || []).filter(b => (!hideTargets || !b.isTarget) && isBannerActive(b));
   const filteredLeadingBanners = (block.leadingBanners || []).filter(b => (!hideTargets || !b.isTarget) && isBannerActive(b));
 
-  const canAddBanner = !readOnly && ['VERTICAL', 'HORIZONTAL', 'HORIZONTAL_MINI', 'TAB', 'BIG_BANNER', 'BANNER_1', 'BANNER_2', 'BANNER_3', 'MENU_BLOCK', 'TODAY_BTV', 'LONG_BANNER'].includes(block.type);
+  const canAddBanner = !readOnly && ['VERTICAL', 'HORIZONTAL', 'HORIZONTAL_MINI', 'TAB', 'BIG_BANNER', 'BANNER_1', 'BANNER_2', 'BANNER_3', 'MENU_BLOCK', 'TODAY_BTV', 'LONG_BANNER', 'FULL_PROMOTION'].includes(block.type);
   const canPreview = ['VERTICAL', 'HORIZONTAL', 'HORIZONTAL_MINI', 'TAB', 'MULTI'].includes(block.type);
   const canEditId = !readOnly;
 
@@ -993,6 +993,13 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
 };
 
 export default function App() {
+  const getLocalTodayString = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
   const [viewMode, setViewMode] = useState('EDITOR');
   const [compareMode, setCompareMode] = useState(false);
   const [showInbox, setShowInbox] = useState(false);
@@ -1001,7 +1008,7 @@ export default function App() {
   const [isViewFilterOpen, setIsViewFilterOpen] = useState(false); 
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false); // 메인 이력 화면(리스트+비교) 노출 여부
   const [isCalendarPopupOpen, setIsCalendarPopupOpen] = useState(false); // 1차 진입 시 뜨는 '달력 팝업' 노출 여부
-  const [historySelectedDate, setHistorySelectedDate] = useState(new Date().toISOString().split('T')[0]); // 선택된 날짜
+  const [historySelectedDate, setHistorySelectedDate] = useState(getLocalTodayString());
   const [historyDetailReq, setHistoryDetailReq] = useState(null); // 상세 비교할 데이터
   
   // [NEW] 통합 뷰 옵션
@@ -1159,12 +1166,42 @@ export default function App() {
 
   const confirmAddBlock = () => {
     if (!newBlockData.title) return alert('블록 타이틀을 입력해주세요.');
-    let newBlock = { id: `new-${Date.now()}`, title: newBlockData.title, isNew: true, remarks: newBlockData.remarks, isTarget: newBlockData.isTarget, targetSeg: newBlockData.targetSeg, type: newBlockData.type, showTitle: newBlockData.showTitle, blockId: newBlockData.contentId };
+    
+    // 기본 블록 데이터 구조 생성
+    let newBlock = { 
+      id: `new-${Date.now()}`, 
+      title: newBlockData.title, 
+      isNew: true, 
+      remarks: newBlockData.remarks, 
+      isTarget: newBlockData.isTarget, 
+      targetSeg: newBlockData.targetSeg, 
+      type: newBlockData.type, 
+      showTitle: newBlockData.showTitle, 
+      blockId: newBlockData.contentId 
+    };
+
+    // [수정된 부분] 배너 카테고리일 때 초기 배너 생성 로직
     if (blockCategory === 'BANNER') {
       newBlock.type = newBlockData.type;
-      newBlock.banners = [{ id: `bn-${Date.now()}`, title: newBlockData.bannerTitle || '배너', type: newBlockData.type === 'BANNER_1' ? '1-COL' : newBlockData.type === 'BANNER_2' ? '2-COL' : '3-COL' }];
+      
+      // 1. 배너 타입에 따라 알맞은 사이즈(Col Type) 결정
+      let initialBannerType = '1-COL';
+      if (newBlockData.type === 'BANNER_2') initialBannerType = '2-COL';
+      else if (newBlockData.type === 'BANNER_3') initialBannerType = '3-COL';
+      else if (newBlockData.type === 'MENU_BLOCK') initialBannerType = 'MENU';
+      else if (newBlockData.type === 'FULL_PROMOTION') initialBannerType = 'FULL'; // [NEW] 핵심: 풀 프로모션 추가
+
+      // 2. 결정된 타입으로 초기 배너 1개 생성
+      newBlock.banners = [{ 
+          id: `bn-${Date.now()}`, 
+          title: newBlockData.bannerTitle || '배너', 
+          type: initialBannerType 
+      }];
+
+      // 3. 예외 케이스 처리
       if (newBlockData.type === 'BIG_BANNER') newBlock.banners[0].desc = "";
       if (newBlockData.type === 'MENU_BLOCK') newBlock.showTitle = false;
+    
     } else if (blockCategory === 'MULTI') {
       newBlock.type = 'MULTI'; newBlock.items = [{ title: '추천1' }];
     } else if (blockCategory === 'SPECIAL') {
@@ -1179,10 +1216,10 @@ export default function App() {
       if (newBlockData.type === 'TAB') newBlock.tabs = [{ id: 't1', name: '탭 1', items: [{ title: '콘텐츠 1' }, { title: '콘텐츠 2' }, { title: '콘텐츠 3' }] }];
       if (newBlockData.useLeadingBanner) newBlock.leadingBanners = [{ title: newBlockData.leadingBannerTitle || '배너' }];
     }
+    
     setBlocks(prev => [...prev, newBlock]);
     setModalState({ isOpen: false, type: null, data: null });
   };
-
   const handleDelete = (id, e) => { e.preventDefault(); e.stopPropagation(); setModalState({ isOpen: true, type: 'DELETE_BLOCK', data: id }); };
   const handleReset = () => { setBlocks(JSON.parse(JSON.stringify(originalBlocks))); };
   const reqDeleteRequest = (id, e) => { e.stopPropagation(); setModalState({ isOpen: true, type: 'DELETE_REQUEST', data: id }); };
@@ -1748,7 +1785,7 @@ export default function App() {
                     // 2. [추가됨] 달력을 '오늘'이 있는 달로 리셋
                     setCurrentCalendarDate(new Date());
                     // 3. 선택된 날짜 값도 오늘로 리셋 (원하시면 유지해도 됨)
-                    setHistorySelectedDate(new Date().toISOString().split('T')[0]);
+                    setHistorySelectedDate(getLocalTodayString());
                   } else {
                     setViewMode(selected);
                     if (selected === 'EDITOR') setHistoryDate(''); 
@@ -2303,9 +2340,20 @@ export default function App() {
                   <div className="flex-1 overflow-y-auto p-2 space-y-2">
                     {(() => {
                       const dailyHistory = requests.filter(r => {
-                         const rDate = r.created_at ? r.created_at.split('T')[0] : r.date;
+                         // [수정됨] 저장된 시간을 Date 객체로 만든 뒤 로컬 날짜 문자열과 비교
+                         let rDateStr = '';
+                         if (r.created_at) {
+                             const d = new Date(r.created_at);
+                             const year = d.getFullYear();
+                             const month = String(d.getMonth() + 1).padStart(2, '0');
+                             const day = String(d.getDate()).padStart(2, '0');
+                             rDateStr = `${year}-${month}-${day}`;
+                         } else {
+                             rDateStr = r.date; // Mock 데이터용 fallback
+                         }
+                         
                          const statusCheck = USE_MOCK_DATA ? true : r.status === 'APPROVED';
-                         return rDate === historySelectedDate && statusCheck;
+                         return rDateStr === historySelectedDate && statusCheck;
                       });
                       if (dailyHistory.length === 0) return <div className="text-center py-10 text-slate-500 text-xs">내역이 없습니다.</div>;
   
