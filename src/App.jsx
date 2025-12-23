@@ -689,6 +689,7 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
       if (bannerType === '2-COL') sizeClass = "w-[200px] h-36"; 
       if (bannerType === '3-COL') sizeClass = "w-[304px] h-36";
       if (bannerType === 'MENU') sizeClass = "w-[200px] h-[88px]"; 
+      if (bannerType === 'FULL') sizeClass = "w-[200px] h-[160px]";
     }
     if ((block.type === 'TODAY_BTV' || block.type === 'BIG_BANNER') && !isBanner) {
         bgClass = `${CONTENT_STYLE.bg} ${CONTENT_STYLE.border} ${CONTENT_STYLE.hover} cursor-pointer`;
@@ -765,9 +766,32 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
                   <button onClick={(e) => { e.stopPropagation(); setIsBannerMenuOpen(!isBannerMenuOpen); }} className="flex items-center gap-1 px-1.5 py-0.5 rounded border border-orange-500/30 text-orange-400 bg-orange-500/10 hover:bg-orange-500/20 transition-colors cursor-pointer" title="추가"><PlusCircle size={10} /> 추가</button>
                   {isBannerMenuOpen && (
                     <div className="absolute top-full left-0 mt-1 bg-[#1e2029] border border-[#2e3038] rounded shadow-xl z-20 overflow-hidden flex flex-col w-28">
-                      {!isToday && !['MENU_BLOCK', 'BIG_BANNER'].includes(block.type) && <><button onClick={(e) => addBanner(e, '1-COL')} className="px-2 py-2 text-[10px] text-left hover:bg-[#2e3038] text-slate-300 border-b border-[#2e3038]/50">1단 배너</button><button onClick={(e) => addBanner(e, '2-COL')} className="px-2 py-2 text-[10px] text-left hover:bg-[#2e3038] text-slate-300 border-b border-[#2e3038]/50">2단 배너</button><button onClick={(e) => addBanner(e, '3-COL')} className="px-2 py-2 text-[10px] text-left hover:bg-[#2e3038] text-slate-300">3단 배너</button></>}
-                      {block.type === 'MENU_BLOCK' && <button onClick={(e) => addBanner(e, 'MENU')} className="px-2 py-2 text-[10px] text-left hover:bg-[#2e3038] text-slate-300">메뉴 배너</button>}
-                      {(block.type === 'TODAY_BTV' || block.type === 'BIG_BANNER') && <><button onClick={(e) => addBanner(e, '1-COL')} className="px-2 py-2 text-[10px] text-left hover:bg-[#2e3038] text-slate-300 border-b border-[#2e3038]/50">배너 추가</button>{block.type === 'TODAY_BTV' && <button onClick={addContentToToday} className="px-2 py-2 text-[10px] text-left hover:bg-[#2e3038] text-slate-300">콘텐츠 추가</button>}</>}
+                      {/* 1. 일반 블록일 때 (1단, 2단, 3단 배너) - FULL_PROMOTION 제외 추가 */}
+                      {!isToday && !['MENU_BLOCK', 'BIG_BANNER', 'FULL_PROMOTION'].includes(block.type) && (
+                        <>
+                          <button onClick={(e) => addBanner(e, '1-COL')} className="px-2 py-2 text-[10px] text-left hover:bg-[#2e3038] text-slate-300 border-b border-[#2e3038]/50">1단 배너</button>
+                          <button onClick={(e) => addBanner(e, '2-COL')} className="px-2 py-2 text-[10px] text-left hover:bg-[#2e3038] text-slate-300 border-b border-[#2e3038]/50">2단 배너</button>
+                          <button onClick={(e) => addBanner(e, '3-COL')} className="px-2 py-2 text-[10px] text-left hover:bg-[#2e3038] text-slate-300">3단 배너</button>
+                        </>
+                      )}
+
+                      {/* 2. 메뉴 블록일 때 */}
+                      {block.type === 'MENU_BLOCK' && (
+                        <button onClick={(e) => addBanner(e, 'MENU')} className="px-2 py-2 text-[10px] text-left hover:bg-[#2e3038] text-slate-300">메뉴 배너</button>
+                      )}
+
+                      {/* 3. [NEW] 풀 프로모션 블록일 때 (새로 추가된 부분) */}
+                      {block.type === 'FULL_PROMOTION' && (
+                        <button onClick={(e) => addBanner(e, 'FULL')} className="px-2 py-2 text-[10px] text-left hover:bg-[#2e3038] text-slate-300">풀 프로모션 배너</button>
+                      )}
+
+                      {/* 4. Today B tv 또는 빅배너일 때 */}
+                      {(block.type === 'TODAY_BTV' || block.type === 'BIG_BANNER') && (
+                        <>
+                          <button onClick={(e) => addBanner(e, '1-COL')} className="px-2 py-2 text-[10px] text-left hover:bg-[#2e3038] text-slate-300 border-b border-[#2e3038]/50">배너 추가</button>
+                          {block.type === 'TODAY_BTV' && <button onClick={addContentToToday} className="px-2 py-2 text-[10px] text-left hover:bg-[#2e3038] text-slate-300">콘텐츠 추가</button>}
+                        </>
+                      )}
                     </div>
                   )}
                   {isBannerMenuOpen && <div className="fixed inset-0 z-10" onClick={() => setIsBannerMenuOpen(false)}></div>}
@@ -930,6 +954,22 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
                         <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1">{banner.isTarget && <span className="text-[8px] bg-pink-600 text-white px-1 rounded font-bold">TARGET</span>}{banner.landingType && <span className="text-[9px] bg-black/50 text-white px-1 rounded">{banner.landingType}</span>}{banner.jiraLink && <span className="text-[8px] bg-[#0052cc] text-white px-1 rounded flex items-center gap-0.5"><Link2 size={6}/></span>}</div>
                         {!isOriginal && !readOnly && <div className="absolute top-2 right-2 opacity-0 group-hover/long:opacity-50 text-white cursor-grab"><GripVertical size={14}/></div>}
                       </div>
+                   ) : block.type === 'FULL_PROMOTION' ? (
+                     /* [NEW] 풀 프로모션 배너 렌더링 (타입 'FULL' 전달) */
+                     <PosterItem 
+                       type="VERTICAL" 
+                       isBanner={true} 
+                       isTarget={banner.isTarget} 
+                       jiraLink={banner.jiraLink} 
+                       bannerType="FULL" 
+                       text={banner.title} 
+                       img={banner.img} 
+                       onClick={(e) => handleBannerClick(e, banner, idx)} 
+                       draggable={!isOriginal && !readOnly} 
+                       onDragStart={(e) => onBannerDragStart(e, idx, 'BANNER')} 
+                       onDragEnter={(e) => onBannerDragEnter(e, idx)} 
+                       onDrop={(e) => onBannerDrop(e, 'BANNER')} 
+                     />
                    ) : block.type === 'MENU_BLOCK' ? (
                        <PosterItem type="VERTICAL" isBanner={true} isTarget={banner.isTarget} jiraLink={banner.jiraLink} bannerType={banner.type} text={banner.title} img={banner.img} onClick={(e) => handleBannerClick(e, banner, idx)} draggable={!isOriginal && !readOnly} onDragStart={(e) => onBannerDragStart(e, idx, 'BANNER')} onDragEnter={(e) => onBannerDragEnter(e, idx)} onDrop={(e) => onBannerDrop(e, 'BANNER')} />
                    ) : (
@@ -1519,7 +1559,7 @@ export default function App() {
           isTarget: reqIsTarget
       };
 
-      const ALL_BANNER_TYPES = ['BIG_BANNER', 'BAND_BANNER', 'LONG_BANNER', 'BANNER_1', 'BANNER_2', 'BANNER_3', 'MENU_BLOCK'];
+      const ALL_BANNER_TYPES = ['BIG_BANNER', 'BAND_BANNER', 'LONG_BANNER', 'FULL_PROMOTION', 'BANNER_1', 'BANNER_2', 'BANNER_3', 'MENU_BLOCK'];
       const UNIQUE_TYPES = ['BIG_BANNER', 'TODAY_BTV', 'TODAY_BTV_BANNER'];
       const MULTI_BANNER_TYPES = ['LONG_BANNER', 'BANNER_1', 'BANNER_2', 'BANNER_3'];
       const LEADING_COMPATIBLE_REQ = ['BANNER_1', 'BANNER_2', 'BANNER_3'];
@@ -1572,6 +1612,7 @@ export default function App() {
           if (req.type === 'BANNER_2') bannerType = '2-COL';
           else if (req.type === 'BANNER_3') bannerType = '3-COL';
           else if (req.type === 'MENU_BLOCK') bannerType = 'MENU';
+          else if (req.type === 'FULL_PROMOTION') bannerType = 'FULL';
           newBlock.banners = [{ ...newBannerObj, type: bannerType }];
       } else if (req.type === 'MULTI') {
           newBlock.type = 'MULTI';
@@ -1979,7 +2020,7 @@ export default function App() {
                             <div><label className="block text-xs font-bold text-slate-500 mb-1">소속 팀</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newRequestData.team} onChange={e => setNewRequestData({ ...newRequestData, team: e.target.value })} placeholder="예: 편성1팀" /></div>
                         </div>
                         <div><label className="block text-xs font-bold text-slate-500 mb-1">제목</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newRequestData.headline} onChange={e => setNewRequestData({ ...newRequestData, headline: e.target.value })} placeholder="요청 제목 입력" /></div>
-                        <div><label className="block text-xs font-bold text-slate-500 mb-1">편성 유형</label><select className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newRequestData.type} onChange={e => setNewRequestData({ ...newRequestData, type: e.target.value })}><optgroup label="배너"><option value="BIG_BANNER">빅배너</option><option value="TODAY_BTV_BANNER">Today B tv 배너</option><option value="BAND_BANNER">띠배너</option><option value="LONG_BANNER">롱배너</option><option value="BANNER_1">1단 배너</option><option value="BANNER_2">2단 배너</option><option value="BANNER_3">3단 배너</option></optgroup></select></div>
+                        <div><label className="block text-xs font-bold text-slate-500 mb-1">편성 유형</label><select className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newRequestData.type} onChange={e => setNewRequestData({ ...newRequestData, type: e.target.value })}><optgroup label="배너"><option value="BIG_BANNER">빅배너</option><option value="TODAY_BTV_BANNER">Today B tv 배너</option><option value="BAND_BANNER">띠배너</option><option value="LONG_BANNER">롱배너</option><option value="FULL_PROMOTION">풀 프로모션 배너</option><option value="BANNER_1">1단 배너</option><option value="BANNER_2">2단 배너</option><option value="BANNER_3">3단 배너</option></optgroup></select></div>
                         <div><label className="block text-xs font-bold text-slate-500 mb-1">편성 요청 위치</label><input type="text" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none" value={newRequestData.location} onChange={e => setNewRequestData({ ...newRequestData, location: e.target.value })} placeholder="예: TV 방송 홈 상단" /></div>
                         <div><label className="block text-xs font-bold text-slate-500 mb-1">상세 내용</label><textarea className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-[#7387ff] outline-none h-20" value={newRequestData.desc} onChange={e => setNewRequestData({ ...newRequestData, desc: e.target.value })} placeholder="요청 상세 내용 입력" /></div>
                         
@@ -2035,7 +2076,7 @@ export default function App() {
                     )}
                     {blockCategory === 'BANNER' && (
                       <div className="space-y-4 pt-2 border-t border-[#2e3038]">
-                        <div><label className="block text-xs font-bold text-slate-500 mb-1">배너 유형</label><select className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-orange-500 outline-none" value={newBlockData.type} onChange={e => setNewBlockData({ ...newBlockData, type: e.target.value })}><option value="BANNER_1">1단 배너</option><option value="BANNER_2">2단 배너</option><option value="BANNER_3">3단 배너</option><option value="BAND_BANNER">띠배너</option><option value="BIG_BANNER">빅배너</option><option value="LONG_BANNER">롱배너</option><option value="MENU_BLOCK">메뉴 블록</option></select></div>
+                        <div><label className="block text-xs font-bold text-slate-500 mb-1">배너 유형</label><select className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white focus:border-orange-500 outline-none" value={newBlockData.type} onChange={e => setNewBlockData({ ...newBlockData, type: e.target.value })}><option value="BANNER_1">1단 배너</option><option value="BANNER_2">2단 배너</option><option value="BANNER_3">3단 배너</option><option value="BAND_BANNER">띠배너</option><option value="BIG_BANNER">빅배너</option><option value="LONG_BANNER">롱배너</option><option value="FULL_PROMOTION">풀 프로모션 배너</option><option value="MENU_BLOCK">메뉴 블록</option></select></div>
                         <div className="bg-[#100d1d] p-3 rounded border border-[#2e3038] space-y-3">
                           <div className="text-xs font-bold text-orange-500 mb-1">초기 배너 속성</div>
                           <div><label className="block text-[10px] text-slate-500 mb-1">배너명</label><input type="text" className="w-full bg-[#191b23] border border-[#2e3038] rounded px-2 py-1 text-xs text-white" value={newBlockData.bannerTitle} onChange={e => setNewBlockData({ ...newBlockData, bannerTitle: e.target.value })} placeholder="배너 이름 입력" /></div>
