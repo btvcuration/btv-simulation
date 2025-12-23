@@ -913,7 +913,29 @@ export default function App() {
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   const [hideTargets, setHideTargets] = useState(false); 
   const [supabase, setSupabase] = useState(USE_MOCK_DATA ? mockSupabase : null);
-
+  const { 
+      gnbList, 
+      setGnbList, 
+      currentMenuPath,  // [핵심] 좌측 메뉴 경로
+      currentMenuId, 
+      setCurrentMenuId,
+      expandedMenuIds, 
+      toggleExpand, 
+      blocks,           // 기존 기능용
+      setBlocks, 
+      originalBlocks, 
+      setOriginalBlocks,
+      requests,         // [핵심] 요청 목록
+      setRequests,
+      isLoading,
+      handleMenuChange, // [핵심] 메뉴 변경 핸들러
+      addGnb, 
+      addSubMenu, 
+      deleteGnb, 
+      deleteSubMenu, 
+      reorderMenu
+  } = useBtvData(supabase, viewMode);
+  
   useEffect(() => {
     if (!USE_MOCK_DATA) {
         try {
@@ -933,13 +955,31 @@ export default function App() {
         }
     }
   }, []);
-
-  const { gnbList, setGnbList, currentMenuPath, currentMenuId, expandedMenuIds, toggleExpand, addGnb, deleteGnb, addSubMenu, deleteSubMenu, reorderMenu, blocks, setBlocks, originalBlocks, setOriginalBlocks, requests, setRequests, isLoading, handleMenuChange } = useBtvData(supabase, viewMode);
   
+  const [unaFilter, setUnaFilter] = useState('ALL');
+  const [inboxFilter, setInboxFilter] = useState('ALL'); // 위치 이동 (변수 사용을 위해 위로 올림)
+
+  // 좌측 메뉴 클릭 시 UNA 필터 동기화
+  useEffect(() => {
+    if (viewMode === 'REQUEST' && currentMenuPath) {
+        setUnaFilter(currentMenuPath);
+    }
+  }, [currentMenuPath, viewMode]);
+
+  // 목록 계산
+  const inboxRequests = requests.filter(r => !r.snapshot || r.snapshot.length === 0).filter(req => inboxFilter === 'ALL' || req.gnb === inboxFilter).filter(r => r.status === 'PENDING');
+  
+  const unaRequests = requests
+    .filter(r => r.snapshot && r.snapshot.length > 0)
+    .filter(req => {
+        if (unaFilter === 'ALL') return true;
+        return req.menuPath && req.menuPath.includes(unaFilter);
+    });
+
+  const unaPendingCount = unaRequests.filter(r => r.status === 'PENDING').length;
+
   const [viewRequest, setViewRequest] = useState(null);
   const [historyDate, setHistoryDate] = useState('');
-  const [inboxFilter, setInboxFilter] = useState('ALL');
-  const [unaFilter, setUnaFilter] = useState('ALL');
   const [modalState, setModalState] = useState({ isOpen: false, type: null, data: null });
   const [blockCategory, setBlockCategory] = useState('CONTENT'); 
   const [newBlockData, setNewBlockData] = useState({ title: '', type: 'VERTICAL', showPreview: false, contentIdType: 'LIBRARY', contentId: '', remarks: '', isTarget: false, targetSeg: '', useLeadingBanner: false, leadingBannerType: '1-COL', leadingBannerTitle: '배너', bannerTitle: '배너', showTitle: true });
@@ -960,11 +1000,6 @@ export default function App() {
   const dragType = useRef(null);
   const [isDragEnabled, setIsDragEnabled] = useState(false);
   const [hoveredBlockIndex, setHoveredBlockIndex] = useState(null);
-
-  const inboxRequests = requests.filter(r => !r.snapshot || r.snapshot.length === 0).filter(req => inboxFilter === 'ALL' || req.gnb === inboxFilter).filter(r => r.status === 'PENDING');
-  const unaRequests = requests.filter(r => r.snapshot && r.snapshot.length > 0).filter(req => unaFilter === 'ALL' || (req.menuPath && req.menuPath.includes(unaFilter)));
-  // [수정] UNA 카운트는 대기(PENDING) 상태만
-  const unaPendingCount = unaRequests.filter(r => r.status === 'PENDING').length;
 
   const displayedBlocks = blocks.filter(block => !hideTargets || !block.isTarget);
 
