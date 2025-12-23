@@ -408,6 +408,24 @@ const useBtvData = (supabase, viewMode) => {
             setGnbList(newList);
         }
     }
+  
+    const moveBlock = (index, direction) => {
+        // 읽기 전용이거나 히스토리 모드일 때는 작동하지 않음
+        if (viewMode === 'HISTORY') return; // readOnly 변수가 없다면 viewMode로만 체크해도 됩니다.
+        
+        const newBlocks = [...blocks];
+        
+        if (direction === 'UP') {
+            if (index === 0) return; // 맨 위면 무시
+            // 위 블록과 현재 블록의 위치 교환
+            [newBlocks[index - 1], newBlocks[index]] = [newBlocks[index], newBlocks[index - 1]];
+        } else if (direction === 'DOWN') {
+            if (index === newBlocks.length - 1) return; // 맨 아래면 무시
+            // 아래 블록과 현재 블록의 위치 교환
+            [newBlocks[index], newBlocks[index + 1]] = [newBlocks[index + 1], newBlocks[index]];
+        }
+        setBlocks(newBlocks);
+    };
 
     const deleteGnb = async (id) => {
           setGnbList(prev => prev.filter(item => item.id !== id));
@@ -443,8 +461,8 @@ const useBtvData = (supabase, viewMode) => {
         originalBlocks, setOriginalBlocks,
         requests, setRequests,
         isLoading, setIsLoading,
-        handleMenuChange, toggleExpand,
-        addGnb, addSubMenu, deleteGnb, deleteSubMenu, reorderMenu
+        handleMenuChange, toggleExpand, 
+        addGnb, addSubMenu, deleteGnb, deleteSubMenu, reorderMenu, moveBlock
     };
 };
 
@@ -704,8 +722,30 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
   return (
     <div className={`p-4 rounded-lg border ${blockStyle.border} ${blockStyle.bg} ${containerStyle} ${dragStyle} relative transition-colors pt-6`}>
       {!readOnly && !isOriginal && (
-         <div className="absolute top-0 left-0 right-0 h-4 flex justify-center items-center cursor-grab active:cursor-grabbing hover:bg-white/10 rounded-t-lg group/handle">
-             <div className="w-10 h-1 bg-slate-600 rounded-full group-hover/handle:bg-slate-400"></div>
+         <div className="absolute top-0 left-0 right-0 h-6 flex justify-center items-center rounded-t-lg group/handle bg-white/5 hover:bg-white/10 transition-colors z-20">
+             {/* 모바일/클릭용 이동 버튼 (Hover 시 또는 항상 노출) */}
+             <div className="flex items-center gap-4 text-slate-500">
+                 <button 
+                    onClick={(e) => { e.stopPropagation(); onMoveUp(); }} 
+                    disabled={isFirst}
+                    className={`p-0.5 hover:text-white hover:bg-slate-600 rounded transition-colors ${isFirst ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}`}
+                    title="위로 이동"
+                 >
+                    <ChevronDown size={12} className="rotate-180"/>
+                 </button>
+                 
+                 {/* 기존 드래그 핸들바 디자인 (시각적 요소) */}
+                 <div className="w-8 h-1 bg-slate-600 rounded-full group-hover/handle:bg-slate-400 cursor-grab active:cursor-grabbing"></div>
+
+                 <button 
+                    onClick={(e) => { e.stopPropagation(); onMoveDown(); }} 
+                    disabled={isLast}
+                    className={`p-0.5 hover:text-white hover:bg-slate-600 rounded transition-colors ${isLast ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}`}
+                    title="아래로 이동"
+                 >
+                    <ChevronDown size={12} />
+                 </button>
+             </div>
          </div>
       )}
 
@@ -948,7 +988,8 @@ export default function App() {
     addSubMenu,
     deleteGnb,
     deleteSubMenu,
-    reorderMenu
+    reorderMenu,
+    moveBlock
   } = useBtvData(supabase, viewMode);
 
   useEffect(() => {
@@ -1700,7 +1741,23 @@ export default function App() {
                         <div key={block.id} draggable={draggable} onDragStart={(e) => onDragStart(e, index)} onDragEnter={(e) => { e.preventDefault(); dragOverItem.current = index; }} onDragEnd={onDragEnd} onDragOver={(e) => e.preventDefault()} onDrop={(e) => onDropFromInbox(e, index)} onMouseEnter={() => setHoveredBlockIndex(index)} onMouseLeave={() => { setHoveredBlockIndex(null); setIsDragEnabled(false); }} className={`relative group transition-all duration-200 ${draggable ? 'cursor-grab active:cursor-grabbing' : ''}`}>
                           {!compareMode && viewMode !== 'HISTORY' && (<><div onMouseEnter={() => setIsDragEnabled(true)} onMouseLeave={() => setIsDragEnabled(false)} className="absolute -left-10 top-0 bottom-0 w-10 flex items-center justify-center cursor-grab text-slate-600 hover:text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"><GripVertical size={20} /></div><button type="button" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => handleDelete(block.id, e)} className="absolute -right-2 -top-2 z-20 p-1.5 bg-[#2e3038] text-slate-400 hover:text-red-400 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all border border-[#44464f] hover:scale-110 cursor-pointer" title="블록 삭제"><Trash2 size={12} /></button></>)}
                           <div className={`absolute -left-2 top-2 z-10 w-5 h-5 rounded-full flex items-center justify-center text-xs font-mono font-bold shadow-lg ${compareMode ? 'bg-[#7387ff] text-white' : 'bg-[#191b23] border border-[#7387ff] text-[#7387ff]'}`}>{index + 1}</div>
-                          <BlockRenderer block={block} isOriginal={false} readOnly={viewMode === 'HISTORY' || compareMode} onUpdate={(updates) => handleUpdateBlock(block.id, updates)} onEditId={(tabIndex) => openEditIdModal(block, tabIndex)} onEditBannerId={(data, idx, isLead, tabIdx) => handleBannerEdit(block, data, idx, isLead, tabIdx)} onEditContentId={(item, idx) => handleEditContent(block.id, idx, item)} onEditTabName={(idx, name) => handleEditTabName(block.id, idx, name)} onAddTab={() => handleAddTab(block.id)} hideTargets={viewOptions.hideTargets} showExpired={viewOptions.showExpired} />
+                          <BlockRenderer 
+                            block={block} 
+                            isOriginal={false} 
+                            readOnly={viewMode === 'HISTORY' || compareMode} 
+                            onUpdate={(updates) => handleUpdateBlock(block.id, updates)} 
+                            onEditId={(tabIndex) => openEditIdModal(block, tabIndex)} 
+                            onEditBannerId={(data, idx, isLead, tabIdx) => handleBannerEdit(block, data, idx, isLead, tabIdx)} 
+                            onEditContentId={(item, idx) => handleEditContent(block.id, idx, item)} 
+                            onEditTabName={(idx, name) => handleEditTabName(block.id, idx, name)} 
+                            onAddTab={() => handleAddTab(block.id)} 
+                            hideTargets={viewOptions.hideTargets} 
+                            showExpired={viewOptions.showExpired}
+                            onMoveUp={() => moveBlock(index, 'UP')}
+                            onMoveDown={() => moveBlock(index, 'DOWN')}
+                            isFirst={index === 0}
+                            isLast={index === displayedBlocks.length - 1}
+                        />
                         </div>
                       );
                     })}
