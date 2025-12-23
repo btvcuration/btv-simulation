@@ -1359,7 +1359,7 @@ export default function App() {
     const draggedId = e.dataTransfer.getData('menuId');
     if (draggedId && draggedId !== targetId) reorderMenu(draggedId, targetId, type);
   };
-  const onDropFromInbox = (e, dropIndex) => {
+const onDropFromInbox = (e, dropIndex) => {
     e.preventDefault();
     const str = e.dataTransfer.getData('requestData');
 
@@ -1367,35 +1367,46 @@ export default function App() {
       const req = JSON.parse(str);
       
       // 1. 특수 블록(Today B tv, Big Banner) 병합 로직
+      // (기존에 해당 타입의 블록이 있으면 그 안에 배너/콘텐츠를 추가합니다)
       if (req.type === 'BIG_BANNER' || req.type === 'TODAY_BTV' || req.type === 'TODAY_BTV_BANNER') {
         let targetType = req.type;
         if (req.type === 'TODAY_BTV_BANNER') targetType = 'TODAY_BTV';
         
-        // 현재 화면에 해당 타입의 블록이 있는지 찾음
         const targetBlockIndex = blocks.findIndex(b => b.type === targetType);
         
         // [중요] 기존 블록이 있는 경우 -> 해당 블록 안에 아이템 추가
         if (targetBlockIndex !== -1) {
           const newBlocks = [...blocks];
-          // 기존 블록 복사 (불변성 유지)
           const targetBlock = { ...newBlocks[targetBlockIndex] };
           
           if (targetType === 'BIG_BANNER') {
             const newBanners = [...(targetBlock.banners || [])];
-            newBanners.unshift({ id: `req-bn-${Date.now()}`, title: req.title, desc: req.desc, landingType: 'NONE', isNew: true });
+            newBanners.unshift({ 
+                id: `req-bn-${Date.now()}`, 
+                title: req.title, 
+                desc: req.desc || '', 
+                landingType: 'NONE', 
+                isNew: true 
+            });
             targetBlock.banners = newBanners;
           } else {
             const newItems = [...(targetBlock.items || [])];
-            newItems.unshift({ id: `req-tb-${Date.now()}`, type: 'BANNER', title: req.title, isTarget: false, isNew: true });
+            newItems.unshift({ 
+                id: `req-tb-${Date.now()}`, 
+                type: 'BANNER', 
+                title: req.title, 
+                isTarget: false, 
+                isNew: true 
+            });
             targetBlock.items = newItems;
           }
           
-          // ▼▼▼ [수정된 핵심 부분] 변경된 블록을 배열에 다시 할당해야 함! ▼▼▼
           newBlocks[targetBlockIndex] = targetBlock;
           
           setBlocks(newBlocks);
+          // [수정] 함수형 업데이트 사용 (prev => ...)
           setRequests(prev => prev.filter(r => r.id !== req.id));
-          return; // 병합 완료 후 종료
+          return; 
         }
       }
 
@@ -1418,8 +1429,8 @@ export default function App() {
       else {
         newBlock.type = req.type || 'VERTICAL';
         newBlock.contentIdType = 'RACE';
-        if (req.type === 'TODAY_BTV' || req.type === 'TODAY_BTV_BANNER') { // TODAY_BTV_BANNER 타입도 처리
-           newBlock.type = 'TODAY_BTV'; // 타입 정규화
+        if (req.type === 'TODAY_BTV' || req.type === 'TODAY_BTV_BANNER') {
+           newBlock.type = 'TODAY_BTV'; 
            newBlock.items = [{ id: `req-tb-${Date.now()}`, type: 'BANNER', title: req.title, isNew: true }];
         } else {
            newBlock.items = [{ id: 'i1', title: 'Content' }];
@@ -1429,7 +1440,9 @@ export default function App() {
       const _blocks = [...blocks];
       _blocks.splice(dropIndex !== undefined ? dropIndex : _blocks.length, 0, newBlock);
       setBlocks(_blocks);
-      setRequests(requests.filter(r => r.id !== req.id));
+      
+      // ▼▼▼ [핵심 수정] 여기서 requests 변수 대신 함수형 업데이트(prev)를 써야 확실하게 삭제됩니다. ▼▼▼
+      setRequests(prev => prev.filter(r => r.id !== req.id));
     }
   };
 
