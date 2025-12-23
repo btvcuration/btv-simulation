@@ -502,7 +502,7 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
   };
 
   const isMulti = block.type === 'MULTI';
-  const isBannerBlock = ['BIG_BANNER', 'BAND_BANNER', 'LONG_BANNER', 'BANNER_1', 'BANNER_2', 'BANNER_3', 'MENU_BLOCK'].includes(block.type);
+  const isBannerBlock = ['BIG_BANNER', 'BAND_BANNER', 'LONG_BANNER', 'FULL_PROMOTION', 'BANNER_1', 'BANNER_2', 'BANNER_3', 'MENU_BLOCK'].includes(block.type);
   const isToday = block.type === 'TODAY_BTV' || block.type === 'BIG_BANNER';
   
   const containerStyle = isOriginal ? 'opacity-60 grayscale border-dashed' : '';
