@@ -1359,66 +1359,89 @@ export default function App() {
     const draggedId = e.dataTransfer.getData('menuId');
     if (draggedId && draggedId !== targetId) reorderMenu(draggedId, targetId, type);
   };
-const onDropFromInbox = (e, dropIndex) => {
+const onDropFromInbox = async (e, dropIndex) => {
     e.preventDefault();
     const str = e.dataTransfer.getData('requestData');
 
     if (str) {
       const req = JSON.parse(str);
+      let targetBlockIndex = -1;
+      let targetType = req.type;
+
+      // [수정 1] 띠배너(BAND_BANNER)는 병합 대상(Multi)에서 제외 (단일 블록 유지)
+      const MULTI_BANNER_TYPES = ['LONG_BANNER', 'BANNER_1', 'BANNER_2', 'BANNER_3'];
+      const UNIQUE_TYPES = ['BIG_BANNER', 'TODAY_BTV', 'TODAY_BTV_BANNER'];
+
+      // -------------------------------------------------------------
+      // [1] 병합 대상 블록 찾기
+      // -------------------------------------------------------------
       
-      // 1. 특수 블록(Today B tv, Big Banner) 병합 로직
-      // (기존에 해당 타입의 블록이 있으면 그 안에 배너/콘텐츠를 추가합니다)
-      if (req.type === 'BIG_BANNER' || req.type === 'TODAY_BTV' || req.type === 'TODAY_BTV_BANNER') {
-        let targetType = req.type;
-        if (req.type === 'TODAY_BTV_BANNER') targetType = 'TODAY_BTV';
-        
-        const targetBlockIndex = blocks.findIndex(b => b.type === targetType);
-        
-        // [중요] 기존 블록이 있는 경우 -> 해당 블록 안에 아이템 추가
-        if (targetBlockIndex !== -1) {
-          const newBlocks = [...blocks];
-          const targetBlock = { ...newBlocks[targetBlockIndex] };
-          
-          if (targetType === 'BIG_BANNER') {
-            const newBanners = [...(targetBlock.banners || [])];
-            newBanners.unshift({ 
-                id: `req-bn-${Date.now()}`, 
-                title: req.title, 
-                desc: req.desc || '', 
-                landingType: 'NONE', 
-                isNew: true 
-            });
-            targetBlock.banners = newBanners;
-          } else {
-            const newItems = [...(targetBlock.items || [])];
-            newItems.unshift({ 
-                id: `req-tb-${Date.now()}`, 
-                type: 'BANNER', 
-                title: req.title, 
-                isTarget: false, 
-                isNew: true 
-            });
-            targetBlock.items = newItems;
-          }
-          
-          newBlocks[targetBlockIndex] = targetBlock;
-          
-          setBlocks(newBlocks);
-          // [수정] 함수형 업데이트 사용 (prev => ...)
-          setRequests(prev => prev.filter(r => r.id !== req.id));
-          return; 
+      // A. 유니크 블록 (화면 전체에서 검색 - Big Banner, Today B tv)
+      if (UNIQUE_TYPES.includes(req.type)) {
+        if (targetType === 'TODAY_BTV_BANNER') targetType = 'TODAY_BTV';
+        targetBlockIndex = blocks.findIndex(b => b.type === targetType);
+      }
+      // B. 멀티 블록 (사용자가 드롭한 위치 확인 - 롱배너, 1/2/3단 배너)
+      else if (MULTI_BANNER_TYPES.includes(req.type)) {
+        if (dropIndex !== undefined && blocks[dropIndex] && blocks[dropIndex].type === req.type) {
+            targetBlockIndex = dropIndex;
         }
       }
+      // C. 띠배너(BAND_BANNER)는 병합 로직을 타지 않음 -> targetBlockIndex = -1 유지
 
-      // 2. 일반 블록 생성 로직 (기존 블록이 없거나 병합 대상이 아닌 경우)
+      // -------------------------------------------------------------
+      // [2] 병합 로직 (타겟 블록을 찾은 경우에만 실행)
+      // -------------------------------------------------------------
+      if (targetBlockIndex !== -1) {
+        const newBlocks = [...blocks];
+        const targetBlock = { ...newBlocks[targetBlockIndex] };
+        
+        if (targetBlock.type === 'TODAY_BTV') {
+           const newItems = [...(targetBlock.items || [])];
+           newItems.unshift({ 
+               id: `req-tb-${Date.now()}`, 
+               type: 'BANNER', 
+               title: req.title, 
+               isTarget: false, 
+               isNew: true 
+           });
+           targetBlock.items = newItems;
+        } else {
+           const newBanners = [...(targetBlock.banners || [])];
+           newBanners.unshift({ 
+               id: `req-bn-${Date.now()}`, 
+               title: req.title, 
+               desc: req.desc || '', 
+               landingType: 'NONE', 
+               isNew: true 
+           });
+           targetBlock.banners = newBanners;
+        }
+        
+        newBlocks[targetBlockIndex] = targetBlock;
+        setBlocks(newBlocks);
+        
+        setRequests(prev => prev.filter(r => r.id !== req.id));
+        if (!USE_MOCK_DATA && supabase) {
+            await supabase.from('requests').update({ status: 'COMPLETED' }).eq('id', req.id);
+        }
+        return; 
+      }
+
+      // -------------------------------------------------------------
+      // [3] 새 블록 생성 로직 (병합되지 않은 경우)
+      // -------------------------------------------------------------
       const newBlock = { id: `req-${Date.now()}`, title: req.title, isNew: true, contentId: 'REQ_ID', remarks: req.remarks, showTitle: true };
       
-      if (['BIG_BANNER', 'BAND_BANNER', 'LONG_BANNER', 'BANNER_1', 'BANNER_2', 'BANNER_3', 'MENU_BLOCK'].includes(req.type)) {
+      // [수정 2] BAND_BANNER 생성 조건에 명시적 포함 (MULTI 배열에서 뺐으므로)
+      if (['BIG_BANNER', 'MENU_BLOCK', 'BAND_BANNER', ...MULTI_BANNER_TYPES].includes(req.type)) {
         newBlock.type = req.type;
+        
         let bannerType = '1-COL';
         if (req.type === 'BANNER_2') bannerType = '2-COL';
         else if (req.type === 'BANNER_3') bannerType = '3-COL';
         else if (req.type === 'MENU_BLOCK') bannerType = 'MENU';
+        // 띠배너는 기본적으로 1-COL 처리하되, CSS에서 가로 100%로 그려짐
         
         newBlock.banners = [{ id: `new-bn-${Date.now()}`, title: req.title, desc: req.desc || '', type: bannerType, landingType: 'NONE' }];
       }
@@ -1429,6 +1452,7 @@ const onDropFromInbox = (e, dropIndex) => {
       else {
         newBlock.type = req.type || 'VERTICAL';
         newBlock.contentIdType = 'RACE';
+        
         if (req.type === 'TODAY_BTV' || req.type === 'TODAY_BTV_BANNER') {
            newBlock.type = 'TODAY_BTV'; 
            newBlock.items = [{ id: `req-tb-${Date.now()}`, type: 'BANNER', title: req.title, isNew: true }];
@@ -1438,11 +1462,16 @@ const onDropFromInbox = (e, dropIndex) => {
       }
       
       const _blocks = [...blocks];
+      // 드롭한 위치에 "새로운 블록"으로 삽입
       _blocks.splice(dropIndex !== undefined ? dropIndex : _blocks.length, 0, newBlock);
       setBlocks(_blocks);
-      
-      // ▼▼▼ [핵심 수정] 여기서 requests 변수 대신 함수형 업데이트(prev)를 써야 확실하게 삭제됩니다. ▼▼▼
+
+      // DB 업데이트
       setRequests(prev => prev.filter(r => r.id !== req.id));
+      if (!USE_MOCK_DATA && supabase) {
+          const { error } = await supabase.from('requests').update({ status: 'COMPLETED' }).eq('id', req.id);
+          if(error) console.error("DB Update Failed", error);
+      }
     }
   };
 
