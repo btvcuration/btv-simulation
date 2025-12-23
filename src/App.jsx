@@ -277,7 +277,7 @@ const useBtvData = (supabase, viewMode) => {
                     
                     // description에서 [요청 타입] 추출 시도
                     if (!r.remarks && r.description) {
-                         const typeMatch = r.description.match(/\[요청 타입\]\s*([A-Z_]+)/);
+                         const typeMatch = r.description.match(/\[요청 타입\]\s*([A-Z0-9_]+)/);
                          if (typeMatch) type = typeMatch[1];
                          
                          const remarksMatch = r.description.match(/\[비고\]\s*(.*)/);
