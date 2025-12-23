@@ -538,10 +538,18 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
 
   const onBannerDrop = (e, listType) => {
       if(readOnly) return;
+      if (!bannerDragItem.current) {
+          return; 
+      }
+      // ▲▲▲
+
+      // 내부 배너 정렬인 경우에만 이벤트를 여기서 처리하고 전파를 중단합니다.
       e.stopPropagation();
       e.preventDefault();
+      
       const dragIndex = bannerDragItem.current?.index;
       const hoverIndex = bannerDragOverItem.current;
+      
       if (dragIndex === undefined || hoverIndex === null || dragIndex === hoverIndex) return;
       if (bannerDragItem.current?.type !== listType) return;
 
@@ -1368,49 +1376,61 @@ const onDropFromInbox = async (e, dropIndex) => {
       let targetBlockIndex = -1;
       let targetType = req.type;
 
-      // [설정] 타입별 분류
-      const MULTI_BANNER_TYPES = ['LONG_BANNER', 'BANNER_1', 'BANNER_2', 'BANNER_3'];
-      const LEADING_COMPATIBLE_REQ = ['BANNER_1', 'BANNER_2', 'BANNER_3']; // 콘텐츠 블록에 들어갈 수 있는 배너
-      const CONTENT_BLOCK_TYPES = ['VERTICAL', 'HORIZONTAL', 'HORIZONTAL_MINI']; // 배너를 받을 수 있는 콘텐츠 블록
-      const UNIQUE_TYPES = ['BIG_BANNER', 'TODAY_BTV', 'TODAY_BTV_BANNER'];
-
       // -------------------------------------------------------------
-      // [1] 병합 대상 블록 찾기
+      // [설정] 타입 정의 (명확한 구분을 위해 리스트업)
       // -------------------------------------------------------------
       
-      // A. 유니크 블록 (화면 전체에서 검색)
+      // 1. 배너형 블록으로 생성되어야 하는 모든 타입들 (이 리스트에 있으면 banners 배열 사용)
+      const ALL_BANNER_TYPES = [
+          'BIG_BANNER', 'BAND_BANNER', 'LONG_BANNER', 
+          'BANNER_1', 'BANNER_2', 'BANNER_3', 'MENU_BLOCK'
+      ];
+
+      // 2. 병합(Merge) 관련 설정
+      const MULTI_BANNER_TYPES = ['LONG_BANNER', 'BANNER_1', 'BANNER_2', 'BANNER_3']; // 같은 타입끼리 뭉칠 수 있음
+      const LEADING_COMPATIBLE_REQ = ['BANNER_1', 'BANNER_2', 'BANNER_3']; // 콘텐츠 블록의 헤더(Leading)로 들어갈 수 있음
+      const CONTENT_BLOCK_TYPES = ['VERTICAL', 'HORIZONTAL', 'HORIZONTAL_MINI']; // Leading Banner를 받을 수 있는 블록
+      const UNIQUE_TYPES = ['BIG_BANNER', 'TODAY_BTV', 'TODAY_BTV_BANNER']; // 화면에 하나만 존재 (무조건 병합)
+
+
+      // -------------------------------------------------------------
+      // [1] 병합(Merge) 대상 블록 찾기
+      // -------------------------------------------------------------
+      
+      // A. 유니크 블록 (화면 전체에서 검색 -> Big Banner, Today B tv)
       if (UNIQUE_TYPES.includes(req.type)) {
         if (targetType === 'TODAY_BTV_BANNER') targetType = 'TODAY_BTV';
         targetBlockIndex = blocks.findIndex(b => b.type === targetType);
       }
       
-      // B. 멀티/콘텐츠 블록 (드롭 위치 기준 판단)
+      // B. 드롭 위치 기반 병합 (Multi Banner, Leading Banner)
       else if (dropIndex !== undefined && blocks[dropIndex]) {
           const droppedBlock = blocks[dropIndex];
 
-          // Case B-1: 동일한 배너 타입끼리 병합 (예: 1단 배너 -> 1단 배너 블록)
+          // Case B-1: 동일한 배너 타입끼리 병합 (예: 2단 배너 -> 2단 배너 블록)
           if (MULTI_BANNER_TYPES.includes(req.type) && droppedBlock.type === req.type) {
               targetBlockIndex = dropIndex;
           }
-          // Case B-2: [NEW] 1,2,3단 배너를 콘텐츠 블록 위에 드롭 (Leading Banner)
+          // Case B-2: 1,2,3단 배너를 콘텐츠 블록 위에 드롭 (Leading Banner 추가)
           else if (LEADING_COMPATIBLE_REQ.includes(req.type) && CONTENT_BLOCK_TYPES.includes(droppedBlock.type)) {
               targetBlockIndex = dropIndex;
           }
       }
 
       // -------------------------------------------------------------
-      // [2] 병합 로직 (타겟 블록을 찾은 경우)
+      // [2] 병합 실행 (타겟 블록을 찾은 경우)
       // -------------------------------------------------------------
       if (targetBlockIndex !== -1) {
         const newBlocks = [...blocks];
         const targetBlock = { ...newBlocks[targetBlockIndex] };
         
-        // 배너 컬럼 타입 변환 (BANNER_1 -> 1-COL)
+        // CSS용 컬럼 타입 변환
         let bannerColType = '1-COL';
         if (req.type === 'BANNER_2') bannerColType = '2-COL';
         else if (req.type === 'BANNER_3') bannerColType = '3-COL';
+        else if (req.type === 'MENU_BLOCK') bannerColType = 'MENU';
 
-        // 2-1. Today B tv 병합
+        // 2-1. Today B tv (Content 추가)
         if (targetBlock.type === 'TODAY_BTV') {
            const newItems = [...(targetBlock.items || [])];
            newItems.unshift({ 
@@ -1422,53 +1442,51 @@ const onDropFromInbox = async (e, dropIndex) => {
            });
            targetBlock.items = newItems;
         } 
-        // 2-2. [NEW] 콘텐츠 블록에 Leading Banner로 추가
+        // 2-2. Leading Banner (콘텐츠 블록 헤더에 추가)
         else if (CONTENT_BLOCK_TYPES.includes(targetBlock.type)) {
             const newLeadingBanners = [...(targetBlock.leadingBanners || [])];
             newLeadingBanners.unshift({
                 id: `req-lb-${Date.now()}`,
                 title: req.title,
                 desc: req.desc || '',
-                type: bannerColType, // 1-COL, 2-COL, 3-COL
+                type: bannerColType,
                 landingType: 'NONE',
                 isNew: true,
-                isTarget: false // Leading Banner는 보통 타겟팅 가능하나 기본값 false
+                isTarget: false
             });
             targetBlock.leadingBanners = newLeadingBanners;
         }
-        // 2-3. 일반 배너 블록끼리 병합
+        // 2-3. 일반 배너 병합 (banners 배열에 추가)
         else {
            const newBanners = [...(targetBlock.banners || [])];
            newBanners.unshift({ 
                id: `req-bn-${Date.now()}`, 
                title: req.title, 
                desc: req.desc || '', 
-               type: bannerColType, // 롱배너 등은 여기서 타입 유지 필요할 수 있음
+               type: bannerColType, 
                landingType: 'NONE', 
                isNew: true 
            });
            targetBlock.banners = newBanners;
         }
         
-        // 변경된 블록 재할당
         newBlocks[targetBlockIndex] = targetBlock;
         setBlocks(newBlocks);
         
-        // 상태 처리
         setRequests(prev => prev.filter(r => r.id !== req.id));
         if (!USE_MOCK_DATA && supabase) {
             await supabase.from('requests').update({ status: 'COMPLETED' }).eq('id', req.id);
         }
-        return; // 병합 완료
+        return; 
       }
 
       // -------------------------------------------------------------
-      // [3] 새 블록 생성 로직 (병합되지 않은 경우)
+      // [3] 새 블록 생성 (병합되지 않은 경우)
       // -------------------------------------------------------------
       const newBlock = { id: `req-${Date.now()}`, title: req.title, isNew: true, contentId: 'REQ_ID', remarks: req.remarks, showTitle: true };
       
-      // 배너형 블록 생성 (띠배너, 메뉴블록 포함 + 1/2/3단이 빈 공간에 떨어졌을 때)
-      if (['BIG_BANNER', 'MENU_BLOCK', 'BAND_BANNER', ...MULTI_BANNER_TYPES].includes(req.type)) {
+      // [수정] 여기가 핵심입니다. ALL_BANNER_TYPES에 포함되면 무조건 banners 구조로 생성합니다.
+      if (ALL_BANNER_TYPES.includes(req.type)) {
         newBlock.type = req.type;
         
         let bannerType = '1-COL';
@@ -1478,13 +1496,12 @@ const onDropFromInbox = async (e, dropIndex) => {
         
         newBlock.banners = [{ id: `new-bn-${Date.now()}`, title: req.title, desc: req.desc || '', type: bannerType, landingType: 'NONE' }];
       }
-      // 멀티 블록
       else if (req.type === 'MULTI') {
         newBlock.type = 'MULTI';
         newBlock.items = [1, 2, 3, 4].map(i => ({ id: `req-m-${i}`, title: '추천' }));
       }
-      // 일반 콘텐츠 블록
       else {
+        // 그 외(TODAY_BTV 포함)는 Content 구조로 생성
         newBlock.type = req.type || 'VERTICAL';
         newBlock.contentIdType = 'RACE';
         
