@@ -912,7 +912,7 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
         </div>
       )}
 
-      {['BAND_BANNER', 'LONG_BANNER', 'BANNER_1', 'BANNER_2', 'BANNER_3', 'TAB', 'VERTICAL', 'HORIZONTAL', 'HORIZONTAL_MINI', 'MULTI', 'MENU_BLOCK'].includes(block.type) && (
+      {['BAND_BANNER', 'LONG_BANNER', 'BANNER_1', 'BANNER_2', 'BANNER_3', 'TAB', 'VERTICAL', 'HORIZONTAL', 'HORIZONTAL_MINI', 'MULTI', 'MENU_BLOCK', 'FULL_PROMOTION'].includes(block.type) && (
         <div className={`flex gap-2 ${['BAND_BANNER'].includes(block.type) ? 'flex-col' : block.type === 'LONG_BANNER' || block.type === 'MULTI' ? '' : block.type === 'TAB' ? 'flex-col' : 'items-center'} overflow-x-auto flex-nowrap min-h-[50px] pb-2`}>
            {block.type === 'TAB' ? (
                <div className="w-full bg-[#100d1d] rounded-lg p-3 border border-slate-700/50">
