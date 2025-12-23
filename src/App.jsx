@@ -478,7 +478,7 @@ const BLOCK_STYLES = {
 };
 
 // [수정된 BlockRenderer] 
-const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEditBannerId, onEditContentId, onEditTabName, onAddTab, readOnly = false, hideTargets = false, showExpired = false }) => {
+const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEditBannerId, onEditContentId, onEditTabName, onAddTab, readOnly = false, hideTargets = false, showExpired = false, onMoveUp, onMoveDown, isFirst, isLast }) => {
   const [activeTab, setActiveTab] = useState(0);
   const [previewIndex, setPreviewIndex] = useState(0);
   const [isBannerMenuOpen, setIsBannerMenuOpen] = useState(false);
