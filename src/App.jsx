@@ -1068,7 +1068,7 @@ export default function App() {
   const [diffSummary, setDiffSummary] = useState([]);
   const [menuNameInput, setMenuNameInput] = useState('');
   const [isDivider, setIsDivider] = useState(false);
-  const [currentCalendarDate, setCurrentCalendarDate] = useState(new Date('2023-10-01'));
+  const [currentCalendarDate, setCurrentCalendarDate] = useState(new Date()); // 오늘 날짜로 변경
 
   const dragItem = useRef(null);
   const dragOverItem = useRef(null);
@@ -1701,14 +1701,15 @@ export default function App() {
                 onChange={(e) => { 
                   const selected = e.target.value;
                   
-                  // [변경됨] HISTORY 선택 시 뷰를 이동하지 않고 달력 팝업만 오픈
                   if (selected === 'HISTORY') {
+                    // 1. 달력 팝업 열기
                     setIsCalendarPopupOpen(true);
-                    // 뷰 모드는 변경하지 않음 (return)
+                    // 2. [추가됨] 달력을 '오늘'이 있는 달로 리셋
+                    setCurrentCalendarDate(new Date());
+                    // 3. 선택된 날짜 값도 오늘로 리셋 (원하시면 유지해도 됨)
+                    setHistorySelectedDate(new Date().toISOString().split('T')[0]);
                   } else {
-                    // 그 외(EDITOR, REQUEST)는 페이지 이동
                     setViewMode(selected);
-                    // 기존 로직 유지 (에디터로 돌아올 때 날짜 초기화 등)
                     if (selected === 'EDITOR') setHistoryDate(''); 
                   }
                 }} 
@@ -1716,7 +1717,7 @@ export default function App() {
               >
                 <option value="EDITOR">에디터</option>
                 <option value="REQUEST">UNA ({unaPendingCount})</option>
-                <option value="HISTORY">이력 (History)</option>
+                <option value="HISTORY">이력</option> {/* (History) 제거됨 */}
               </select>
               <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400"><ChevronDown size={12} /></div>
             </div>
