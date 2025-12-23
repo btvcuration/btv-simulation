@@ -1365,13 +1365,21 @@ export default function App() {
 
     if (str) {
       const req = JSON.parse(str);
+      
+      // 1. 특수 블록(Today B tv, Big Banner) 병합 로직
       if (req.type === 'BIG_BANNER' || req.type === 'TODAY_BTV' || req.type === 'TODAY_BTV_BANNER') {
         let targetType = req.type;
         if (req.type === 'TODAY_BTV_BANNER') targetType = 'TODAY_BTV';
+        
+        // 현재 화면에 해당 타입의 블록이 있는지 찾음
         const targetBlockIndex = blocks.findIndex(b => b.type === targetType);
+        
+        // [중요] 기존 블록이 있는 경우 -> 해당 블록 안에 아이템 추가
         if (targetBlockIndex !== -1) {
           const newBlocks = [...blocks];
+          // 기존 블록 복사 (불변성 유지)
           const targetBlock = { ...newBlocks[targetBlockIndex] };
+          
           if (targetType === 'BIG_BANNER') {
             const newBanners = [...(targetBlock.banners || [])];
             newBanners.unshift({ id: `req-bn-${Date.now()}`, title: req.title, desc: req.desc, landingType: 'NONE', isNew: true });
@@ -1381,18 +1389,26 @@ export default function App() {
             newItems.unshift({ id: `req-tb-${Date.now()}`, type: 'BANNER', title: req.title, isTarget: false, isNew: true });
             targetBlock.items = newItems;
           }
+          
+          // ▼▼▼ [수정된 핵심 부분] 변경된 블록을 배열에 다시 할당해야 함! ▼▼▼
+          newBlocks[targetBlockIndex] = targetBlock;
+          
           setBlocks(newBlocks);
           setRequests(prev => prev.filter(r => r.id !== req.id));
-          return;
+          return; // 병합 완료 후 종료
         }
       }
+
+      // 2. 일반 블록 생성 로직 (기존 블록이 없거나 병합 대상이 아닌 경우)
       const newBlock = { id: `req-${Date.now()}`, title: req.title, isNew: true, contentId: 'REQ_ID', remarks: req.remarks, showTitle: true };
+      
       if (['BIG_BANNER', 'BAND_BANNER', 'LONG_BANNER', 'BANNER_1', 'BANNER_2', 'BANNER_3', 'MENU_BLOCK'].includes(req.type)) {
         newBlock.type = req.type;
         let bannerType = '1-COL';
         if (req.type === 'BANNER_2') bannerType = '2-COL';
         else if (req.type === 'BANNER_3') bannerType = '3-COL';
         else if (req.type === 'MENU_BLOCK') bannerType = 'MENU';
+        
         newBlock.banners = [{ id: `new-bn-${Date.now()}`, title: req.title, desc: req.desc || '', type: bannerType, landingType: 'NONE' }];
       }
       else if (req.type === 'MULTI') {
@@ -1402,12 +1418,14 @@ export default function App() {
       else {
         newBlock.type = req.type || 'VERTICAL';
         newBlock.contentIdType = 'RACE';
-        if (req.type === 'TODAY_BTV') {
-          newBlock.items = [{ id: `req-tb-${Date.now()}`, type: 'BANNER', title: req.title, isNew: true }];
+        if (req.type === 'TODAY_BTV' || req.type === 'TODAY_BTV_BANNER') { // TODAY_BTV_BANNER 타입도 처리
+           newBlock.type = 'TODAY_BTV'; // 타입 정규화
+           newBlock.items = [{ id: `req-tb-${Date.now()}`, type: 'BANNER', title: req.title, isNew: true }];
         } else {
-          newBlock.items = [{ id: 'i1', title: 'Content' }];
+           newBlock.items = [{ id: 'i1', title: 'Content' }];
         }
       }
+      
       const _blocks = [...blocks];
       _blocks.splice(dropIndex !== undefined ? dropIndex : _blocks.length, 0, newBlock);
       setBlocks(_blocks);
