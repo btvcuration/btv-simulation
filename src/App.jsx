@@ -1216,6 +1216,7 @@ export default function App() {
       return days;
   };
 
+  // [Helper] 메뉴 이름으로 ID를 찾는 재귀 함수
   const findGnbIdByName = (list, name) => {
       for (const item of list) {
           if (item.name === name) return item.id;
@@ -1227,6 +1228,7 @@ export default function App() {
       return null;
   };
 
+  // [수정됨] 중복 선언 제거 및 로직 정상화
   const handleConfirmAction = async () => {
     const { type, data } = modalState;
 
@@ -1256,8 +1258,9 @@ export default function App() {
     }
     else if (type === 'APPROVE') { 
         const targetReqId = data.id;
-        // [핵심 수정] 현재 보고 있는 메뉴(currentMenuId)가 아니라, 요청서에 적힌 메뉴(data.gnb)의 ID를 찾아야 함
-        const targetGnbName = data.gnb; // fetchRequests에서 gnb_target을 gnb로 매핑해둠
+        
+        // [핵심 로직] 요청서에 적힌 타겟 메뉴(gnb_target)의 ID를 찾아서 처리
+        const targetGnbName = data.gnb; 
         const targetGnbId = findGnbIdByName(gnbList, targetGnbName);
 
         if (!targetGnbId) {
@@ -1269,7 +1272,7 @@ export default function App() {
         if (USE_MOCK_DATA) { 
             setRequests(prev => prev.map(r => r.id === targetReqId ? { ...r, status: 'APPROVED' } : r));
             
-            // 만약 현재 보고 있는 메뉴와 타겟 메뉴가 같다면 화면도 즉시 갱신
+            // 현재 보고 있는 메뉴와 타겟 메뉴가 같다면 화면도 즉시 갱신
             if (currentMenuId === targetGnbId && data.snapshot) { 
                 const newSnapshot = JSON.parse(JSON.stringify(data.snapshot));
                 setBlocks(newSnapshot); 
@@ -1280,13 +1283,12 @@ export default function App() {
         else {
             if (!supabase) return;
             
-            // [핵심 수정] currentMenuId -> targetGnbId로 변경
-            // 1. 해당 메뉴의 기존 블록 삭제
+            // 1. 해당 메뉴(targetGnbId)의 기존 블록 삭제
             await supabase.from('blocks').delete().eq('gnb_id', targetGnbId);
             
             // 2. 해당 메뉴에 새 블록 Insert
             const newBlocksData = data.snapshot.map((b, idx) => ({ 
-                gnb_id: targetGnbId, // <-- 여기가 수정됨
+                gnb_id: targetGnbId, 
                 type: b.type, 
                 title: b.title, 
                 block_id_code: b.blockId, 
@@ -1311,13 +1313,13 @@ export default function App() {
             if(!error) { 
                 await supabase.from('requests').update({ status: 'APPROVED' }).eq('id', data.id); 
                 
-                // 현재 보고 있는 메뉴와 같다면 리로드, 아니면 알림만
+                // 현재 보고 있는 메뉴와 타겟이 같다면 리로드
                 if (currentMenuId === targetGnbId) {
                     alert('편성이 반영(배포)되었습니다!'); 
                     window.location.reload(); 
                 } else {
                     alert(`'${targetGnbName}' 메뉴에 편성이 정상적으로 반영되었습니다.`);
-                    // 요청 목록 상태 업데이트 (리로드 없이)
+                    // 요청 목록 상태만 업데이트 (리로드 X)
                     setRequests(prev => prev.map(r => r.id === data.id ? { ...r, status: 'APPROVED' } : r));
                 }
             } else {
