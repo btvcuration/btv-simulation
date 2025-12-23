@@ -1799,7 +1799,7 @@ export default function App() {
         {/* Modal */}
         {modalState.isOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-            <div className={`bg-[#191b23] rounded-xl border border-[#2e3038] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] ${modalState.type === 'VIEW_UNA_DETAIL' ? 'w-full max-w-6xl h-[85vh]' : modalState.type === 'NEW_REQUEST' || modalState.type === 'ADD_BLOCK' || modalState.type === 'HISTORY_SELECT' ? 'w-[500px]' : 'w-[450px]'}`}>
+            <div className={`bg-[#191b23] rounded-xl border border-[#2e3038] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] ${modalState.type === 'VIEW_UNA_DETAIL' ? 'w-[95vw] max-w-[1800px] h-[90vh]' : modalState.type === 'NEW_REQUEST' || modalState.type === 'ADD_BLOCK' || modalState.type === 'HISTORY_SELECT' ? 'w-[500px]' : 'w-[450px]'}`}>
               <div className="p-5 border-b border-[#2e3038] flex justify-between items-center bg-[#1e2029] shrink-0">
                 <h3 className="text-base font-bold text-white flex items-center gap-2">
                   {modalState.type === 'HISTORY_SELECT' ? '히스토리 탐색' : modalState.type === 'NEW_REQUEST' ? '신규 프로모션 요청 등록' : modalState.type === 'ADD_BLOCK' ? '신규 블록 생성' : modalState.type === 'SAVE' ? '편성 반영 정보 입력' : modalState.type === 'APPROVE' ? '편성 반영 확인' : modalState.type === 'VIEW_UNA_DETAIL' ? '편성 변경 상세 비교' : modalState.type === 'EDIT_ID' ? '블록 설정 수정' : modalState.type === 'EDIT_BANNER' ? '배너 수정' : modalState.type === 'EDIT_CONTENT' ? '콘텐츠 수정' : modalState.type === 'EDIT_TAB_NAME' ? '탭 이름 수정' : modalState.type === 'ADD_GNB' ? '최상위 메뉴 추가' : modalState.type === 'ADD_SUBMENU' ? '하위 메뉴 추가' : modalState.type === 'DELETE_BANNER_CONFIRM' ? '삭제 확인' : modalState.type === 'DELETE_REQUEST' ? '요청 삭제 확인' : '확인'}
@@ -1809,33 +1809,40 @@ export default function App() {
               <div className="p-6 overflow-y-auto flex-1">
                 {modalState.type === 'VIEW_UNA_DETAIL' && modalState.data && (
                   <div className="h-full flex flex-col gap-4 overflow-hidden">
-                    <div className="flex gap-4 flex-1 overflow-y-auto pr-1 relative">
-                      {/* Before Column */}
-                      <div className="flex-1 flex flex-col border border-[#2e3038] rounded-lg bg-[#100d1d] h-fit min-h-full">
-                        <div className="sticky top-0 z-20 p-3 bg-[#1e2029] border-b border-orange-500/30 flex justify-between items-center shadow-lg">
-                          <span className="text-orange-400 font-bold text-sm">변경 전 (Original)</span>
+                    {/* Grid로 변경하여 5:5 비율 고정 및 간격 확대 */}
+                    <div className="grid grid-cols-2 gap-8 flex-1 overflow-y-auto pr-2 relative p-2">
+                      
+                      {/* Before Column (변경 전) */}
+                      <div className="flex flex-col border border-[#2e3038] rounded-lg bg-[#100d1d] h-fit min-h-full shadow-lg">
+                        <div className="sticky top-0 z-20 p-4 bg-[#1e2029] border-b border-orange-500/30 flex justify-between items-center shadow-md rounded-t-lg">
+                          <span className="text-orange-400 font-bold text-base flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-orange-500"></div> 변경 전 (Original)
+                          </span>
                         </div>
-                        <div className="p-4 space-y-3 opacity-80 grayscale-[0.3]">
+                        <div className="p-6 space-y-5 opacity-80 grayscale-[0.3]">
                           {modalState.data.originalSnapshot && modalState.data.originalSnapshot.map((block, idx) => (
                             <div key={`prev-${idx}`} className="relative">
-                              <div className="absolute -left-2 top-2 z-10 w-5 h-5 bg-slate-700 text-slate-400 rounded-full flex items-center justify-center text-xs font-mono">{idx + 1}</div>
+                              <div className="absolute -left-3 top-2 z-10 w-6 h-6 bg-slate-700 text-slate-300 rounded-full flex items-center justify-center text-sm font-mono border border-slate-600 shadow">{idx + 1}</div>
                               <BlockRenderer block={block} isOriginal={true} readOnly={true} />
                             </div>
                           ))}
                           {(!modalState.data.originalSnapshot || modalState.data.originalSnapshot.length === 0) && (
-                            <div className="text-slate-500 text-center py-10 text-xs">데이터 없음</div>
+                            <div className="text-slate-500 text-center py-20 text-sm">데이터 없음</div>
                           )}
                         </div>
                       </div>
-                      {/* After Column */}
-                      <div className="flex-1 flex flex-col border border-[#7387ff]/50 rounded-lg bg-[#100d1d] h-fit min-h-full">
-                        <div className="sticky top-0 z-20 p-3 bg-[#1e2029] border-b border-[#7387ff]/50 flex justify-between items-center shadow-lg">
-                          <span className="text-[#7387ff] font-bold text-sm">변경 후 (New)</span>
+                
+                      {/* After Column (변경 후) */}
+                      <div className="flex flex-col border-2 border-[#7387ff]/30 rounded-lg bg-[#100d1d] h-fit min-h-full shadow-xl shadow-[#7387ff]/5">
+                        <div className="sticky top-0 z-20 p-4 bg-[#1e2029] border-b border-[#7387ff]/50 flex justify-between items-center shadow-md rounded-t-lg">
+                          <span className="text-[#7387ff] font-bold text-base flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-[#7387ff]"></div> 변경 후 (New)
+                          </span>
                         </div>
-                        <div className="p-4 space-y-3">
+                        <div className="p-6 space-y-5">
                           {modalState.data.snapshot && modalState.data.snapshot.map((block, idx) => (
                             <div key={`new-${idx}`} className="relative">
-                              <div className="absolute -left-2 top-2 z-10 w-5 h-5 bg-[#7387ff] text-white rounded-full flex items-center justify-center text-xs font-mono font-bold shadow-lg">{idx + 1}</div>
+                              <div className="absolute -left-3 top-2 z-10 w-6 h-6 bg-[#7387ff] text-white rounded-full flex items-center justify-center text-sm font-mono font-bold shadow-lg ring-2 ring-[#100d1d]">{idx + 1}</div>
                               <BlockRenderer block={block} isOriginal={false} readOnly={true} />
                             </div>
                           ))}
@@ -1843,19 +1850,22 @@ export default function App() {
                       </div>
                     </div>
                     {/* Summary Footer */}
-                    <div className="bg-[#191b23] p-4 rounded-lg border border-[#2e3038] shrink-0 z-30">
-                      <h4 className="text-sm font-bold text-white mb-2">변경 내역 상세</h4>
+                    <div className="bg-[#191b23] p-5 rounded-lg border border-[#2e3038] shrink-0 z-30 shadow-2xl">
+                      <h4 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
+                        <FileText size={16} className="text-slate-400"/> 변경 내역 요약
+                      </h4>
                       {modalState.data.changes && modalState.data.changes.length > 0 ? (
-                        <ul className="space-y-1 max-h-[100px] overflow-y-auto custom-scrollbar">
+                        <ul className="space-y-2 max-h-[150px] overflow-y-auto custom-scrollbar pr-2">
                           {modalState.data.changes.map((change, idx) => (
-                            <li key={idx} className="text-xs text-slate-300 flex items-center gap-2">
-                              <span className={`w-1.5 h-1.5 rounded-full ${change.type === '신규' ? 'bg-blue-400' : change.type === '삭제' ? 'bg-red-400' : 'bg-orange-400'}`}></span>
-                              <span className={`font-bold ${change.type === '신규' ? 'text-blue-400' : change.type === '삭제' ? 'text-red-400' : 'text-orange-400'}`}>[{change.type}]</span>
-                              {change.desc}
+                            <li key={idx} className="text-sm text-slate-300 flex items-start gap-3 bg-[#100d1d] p-2.5 rounded border border-[#2e3038]">
+                              <span className={`mt-0.5 shrink-0 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${change.type === '신규' ? 'bg-blue-500/20 text-blue-400' : change.type === '삭제' ? 'bg-red-500/20 text-red-400' : 'bg-orange-500/20 text-orange-400'}`}>
+                                {change.type}
+                              </span>
+                              <span className="leading-relaxed">{change.desc}</span>
                             </li>
                           ))}
                         </ul>
-                      ) : <p className="text-xs text-slate-500">변경 내역 텍스트가 없습니다.</p>}
+                      ) : <p className="text-sm text-slate-500">변경 내역 텍스트가 없습니다.</p>}
                     </div>
                   </div>
                 )}
