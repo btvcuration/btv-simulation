@@ -1129,29 +1129,63 @@ export default function App() {
   const generateDiffs = () => {
     const changes = [];
     const orgMap = new Map(originalBlocks.map(b => [b.id, b]));
-    originalBlocks.forEach(org => { if (!blocks.find(b => b.id === org.id)) changes.push({ type: '삭제', block: org, desc: `[${org.type}] '${org.title}' 블록 삭제` }); });
+
+    // 1. 삭제된 블록 감지
+    originalBlocks.forEach(org => { 
+        if (!blocks.find(b => b.id === org.id)) {
+            changes.push({ type: '삭제', block: org, desc: `[${org.type}] '${org.title}' 블록 삭제` }); 
+        }
+    });
+
+    // 2. 신규 및 수정된 블록 감지
     blocks.forEach((block) => {
       const original = orgMap.get(block.id);
+      
       if (!original) {
+          // 신규 블록
           changes.push({ type: '신규', block, desc: `[${block.type}] '${block.title}' 블록 신규 추가` });
       } else {
+        // 수정된 블록 (상세 비교)
         const diffs = [];
+        
+        // (1) 타이틀 변경
         if (block.title !== original.title) diffs.push(`타이틀 변경`);
         
+        // (2) [NEW] 블록명 노출 여부 변경
+        if (block.showTitle !== original.showTitle) {
+            diffs.push(`블록명 ${block.showTitle ? '노출' : '숨김'} 처리`);
+        }
+
+        // (3) [NEW] ID (Library/Race) 변경
+        if (block.contentId !== original.contentId) {
+            diffs.push(`ID 변경(${original.contentId || '없음'} → ${block.contentId})`);
+        }
+        
+        // (4) 배너/아이템 변경 감지
         const newBanners = block.banners || block.items || [];
         const oldBanners = original.banners || original.items || [];
         
         if (newBanners.length !== oldBanners.length) {
             diffs.push(`배너 수 변경(${oldBanners.length}→${newBanners.length})`);
         } else {
+            // 배너 내부 속성(기간 등) 비교
             newBanners.forEach((nb, idx) => {
                 const ob = oldBanners[idx];
-                if (ob && (nb.startDate !== ob.startDate || nb.endDate !== ob.endDate)) {
-                    diffs.push(`배너#${idx+1} 기간 변경`);
+                if (ob) {
+                    if (nb.startDate !== ob.startDate || nb.endDate !== ob.endDate) {
+                        diffs.push(`배너#${idx+1} 기간 변경`);
+                    }
+                    if (nb.img !== ob.img) {
+                        diffs.push(`배너#${idx+1} 이미지 교체`);
+                    }
                 }
             });
         }
-        if (diffs.length > 0) changes.push({ type: '수정', block, desc: `[${block.title}] ${diffs.join(', ')}` });
+
+        // 변경사항이 하나라도 있으면 changes에 추가
+        if (diffs.length > 0) {
+            changes.push({ type: '수정', block, desc: `[${block.title}] ${diffs.join(', ')}` });
+        }
       }
     });
     return changes;
@@ -1493,6 +1527,7 @@ export default function App() {
       }
 
       if (USE_MOCK_DATA) {
+        // ... (기존 Mock 로직 유지) ...
         setRequests(prev => prev.map(r => r.id === targetReqId ? { ...r, status: 'APPROVED' } : r));
         if (currentMenuId === targetGnbId && data.snapshot) {
           const newSnapshot = JSON.parse(JSON.stringify(data.snapshot));
@@ -1503,36 +1538,53 @@ export default function App() {
       }
       else {
         if (!supabase) return;
+        
+        // 1. 기존 블록 삭제
         await supabase.from('blocks').delete().eq('gnb_id', targetGnbId);
+        
+        // 2. [수정됨] 신규 블록 Insert 데이터 구성 (매핑 주의!)
         const newBlocksData = data.snapshot.map((b, idx) => ({
           gnb_id: targetGnbId,
           type: b.type,
           title: b.title,
-          block_id_code: b.blockId,
-          show_title: b.show_title,
+          
+          // [중요] State의 camelCase 속성을 DB의 snake_case 컬럼으로 정확히 매핑
+          block_id_code: b.contentId,  // State: contentId -> DB: block_id_code
+          show_title: b.showTitle,     // State: showTitle -> DB: show_title
+          
           sort_order: idx,
+          
+          // content JSON 컬럼에는 전체 데이터를 덤프
           content: {
             items: b.items,
             banners: b.banners,
             tabs: b.tabs,
             leadingBanners: b.leadingBanners,
             showPreview: b.showPreview,
+            
             contentId: b.contentId,
             contentIdType: b.contentIdType,
+            
             isTarget: b.isTarget,
             targetSeg: b.targetSeg,
             remarks: b.remarks
           }
         }));
+
         const { error } = await supabase.from('blocks').insert(newBlocksData);
+        
         if (!error) {
           await supabase.from('requests').update({ status: 'APPROVED' }).eq('id', data.id);
+          
+          // 현재 보고 있는 메뉴라면 화면도 즉시 갱신 (새로고침 없이)
           if (currentMenuId === targetGnbId) {
-            alert('편성이 반영(배포)되었습니다!');
-            window.location.reload();
+             const newSnapshot = JSON.parse(JSON.stringify(data.snapshot));
+             setBlocks(newSnapshot);
+             setOriginalBlocks(JSON.parse(JSON.stringify(newSnapshot))); // 원본 데이터도 갱신하여 '비교' 모드 리셋
+             alert('편성이 반영(배포)되었습니다!');
           } else {
-            alert(`'${targetGnbName}' 메뉴에 편성이 정상적으로 반영되었습니다.`);
-            setRequests(prev => prev.map(r => r.id === data.id ? { ...r, status: 'APPROVED' } : r));
+             alert(`'${targetGnbName}' 메뉴에 편성이 정상적으로 반영되었습니다.`);
+             setRequests(prev => prev.map(r => r.id === data.id ? { ...r, status: 'APPROVED' } : r));
           }
         } else {
           console.error(error);
