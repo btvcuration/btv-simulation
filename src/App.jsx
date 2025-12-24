@@ -980,9 +980,6 @@ export default function App() {
 
   const [viewRequest, setViewRequest] = useState(null);
   const [historyDate, setHistoryDate] = useState('');
-  const [modalState, setModalState] = useState({ isOpen: false, type: null, data: null, position: 'BOTTOM' });
-  const scrollContainerRef = useRef(null);
-  
   const todayStr = new Date().toISOString().split('T')[0];
   const [newRequestData, setNewRequestData] = useState({ 
       requester: '', team: '', headline: '', location: '', desc: '', remarks: '', 
