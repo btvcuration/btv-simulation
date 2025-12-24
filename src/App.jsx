@@ -301,7 +301,7 @@ const useBtvData = (supabase, viewMode) => {
                         createdAt: new Date(r.created_at).toLocaleString(),
                         remarks: r.remarks, 
                         jiraLink: r.jira_link,
-                        changes: [], 
+                        changes: r.changes || [],
                         snapshot: r.snapshot_new, 
                         originalSnapshot: r.snapshot_original, 
                         menuPath: r.gnb_target 
@@ -2011,7 +2011,7 @@ export default function App() {
                         <ul className="space-y-2 max-h-[150px] overflow-y-auto custom-scrollbar pr-2">
                           {modalState.data.changes.map((change, idx) => (
                             <li key={idx} className="text-sm text-slate-300 flex items-start gap-3 bg-[#100d1d] p-2.5 rounded border border-[#2e3038]">
-                              <span className={`mt-0.5 shrink-0 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${change.type === '신규' ? 'bg-blue-500/20 text-blue-400' : change.type === '삭제' ? 'bg-red-500/20 text-red-400' : 'bg-orange-500/20 text-orange-400'}`}>
+                              <span className={`mt-0.5 shrink-0 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${change.type === '설명' ? 'bg-purple-500/20 text-purple-400' : change.type === '신규' ? 'bg-blue-500/20 text-blue-400' : change.type === '삭제' ? 'bg-red-500/20 text-red-400' : 'bg-orange-500/20 text-orange-400'}`}>
                                 {change.type}
                               </span>
                               <span className="leading-relaxed">{change.desc}</span>
