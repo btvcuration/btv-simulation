@@ -1341,13 +1341,13 @@ export default function App() {
     const daysInMonth = getDaysInMonth(currentCalendarDate);
     const firstDay = getFirstDayOfMonth(currentCalendarDate);
     
-    // 오늘 날짜 구하기 (YYYY-MM-DD)
+    // 오늘 날짜 (시스템 시간 기준)
     const todayObj = new Date();
     const todayStr = `${todayObj.getFullYear()}-${String(todayObj.getMonth() + 1).padStart(2, '0')}-${String(todayObj.getDate()).padStart(2, '0')}`;
 
     const days = [];
     
-    // 1. 빈 칸 (지난달 날짜 영역)
+    // 1. 빈 칸
     for (let i = 0; i < firstDay; i++) {
         days.push(<div key={`empty-${i}`} className="h-10 w-full pointer-events-none"></div>);
     }
@@ -1356,11 +1356,9 @@ export default function App() {
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       
-      // [수정됨] 이력이 있는 날인지 확인 (dateYMD 필드 사용)
+      // 이력이 있는 날인지 확인
       const hasHistory = requests.some(r => {
-          // 승인된(APPROVED) 건만 이력으로 인정
           if(r.status !== 'APPROVED') return false;
-          // 아까 만든 dateYMD와 달력 날짜 비교
           return r.dateYMD === dateStr;
       });
 
@@ -1371,34 +1369,33 @@ export default function App() {
         <button 
           key={d} 
           onClick={() => {
-             // 날짜 클릭 시 동작
              setHistorySelectedDate(dateStr); 
              setIsCalendarPopupOpen(false); 
              setIsHistoryModalOpen(true);
              setHistoryDetailReq(null);
           }} 
           className={`
-            h-10 w-full rounded-lg flex flex-col items-center justify-center relative transition-all group border
+            h-10 w-full rounded-lg flex flex-col items-center justify-center relative transition-all group border overflow-visible
             ${isToday 
-                ? 'border-[#7387ff] bg-[#7387ff]/20 text-white font-bold shadow-[0_0_10px_rgba(115,135,255,0.3)]' 
+                ? 'border-[#7387ff] bg-[#7387ff]/20 text-white font-bold shadow-[0_0_15px_rgba(115,135,255,0.4)] z-10' 
                 : 'border-transparent hover:bg-[#2e3038] hover:border-slate-600'}
             ${!isToday && hasHistory ? 'text-slate-100 font-semibold bg-[#2e3038]' : ''}
             ${!isToday && !hasHistory ? 'text-slate-400' : ''}
           `}
         >
           {/* 날짜 숫자 */}
-          <span className="text-sm z-10">{d}</span>
+          <span className="text-sm z-10 relative">{d}</span>
           
-          {/* TODAY 배지 (오늘인 경우 우측 상단 표시) */}
+          {/* [수정됨] TODAY 배지: 위치를 안쪽으로 조정하고 z-index 강화 */}
           {isToday && (
-            <span className="absolute -top-1.5 -right-1 text-[8px] bg-[#7387ff] text-white px-1 rounded shadow-sm leading-tight z-20">
+            <span className="absolute -top-2 -right-2 text-[8px] bg-[#7387ff] text-white px-1.5 py-0.5 rounded-full font-bold shadow-md z-50 border border-[#191b23]">
               TODAY
             </span>
           )}
 
           {/* 이력 점 (Dot) */}
           {hasHistory && (
-             <div className={`w-1.5 h-1.5 rounded-full mt-1 ${isToday ? 'bg-white' : 'bg-[#7387ff] shadow-[0_0_5px_#7387ff]'}`}></div>
+             <div className={`w-1.5 h-1.5 rounded-full mt-1 z-10 ${isToday ? 'bg-white' : 'bg-[#7387ff] shadow-[0_0_5px_#7387ff]'}`}></div>
           )}
         </button>
       );
