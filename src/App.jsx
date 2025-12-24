@@ -477,7 +477,7 @@ const BLOCK_STYLES = {
   CONTENT: { bg: 'bg-[#191b23]', border: 'border-[#44464f]', badge: 'border-slate-700 text-slate-500' }
 };
 
-// [수정된 BlockRenderer] 메인 이미지 비율 분리 적용
+// [수정된 BlockRenderer] Today B tv(22:10), 빅배너(21:9) 비율 적용
 const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEditBannerId, onEditContentId, onEditTabName, onAddTab, readOnly = false, hideTargets = false, showExpired = false, onMoveUp, onMoveDown, isFirst, isLast }) => {
   const [activeTab, setActiveTab] = useState(0);
   const [previewIndex, setPreviewIndex] = useState(0);
@@ -663,11 +663,10 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
       </div>
 
       {(block.type === 'TODAY_BTV' || block.type === 'BIG_BANNER') && (
-        // [수정 포인트 1] 컨테이너에는 h-auto를 주고, aspect-ratio는 제거합니다.
         <div className={`relative w-full h-auto bg-slate-900 rounded-lg overflow-hidden border ${block.type === 'TODAY_BTV' ? 'border-blue-500/30' : 'border-orange-500/30'} flex flex-col`}>
             
-            {/* [수정 포인트 2] 메인 이미지 영역(div)에 aspect-ratio를 직접 부여합니다. */}
-            <div className={`w-full ${block.type === 'TODAY_BTV' ? 'aspect-[3/2]' : 'aspect-[21/9]'} bg-cover relative group cursor-pointer`}
+            {/* [수정] Today B tv: aspect-[22/10], 빅배너: aspect-[21/9] 적용 */}
+            <div className={`w-full ${block.type === 'TODAY_BTV' ? 'aspect-[22/10]' : 'aspect-[21/9]'} bg-cover relative group cursor-pointer`}
                  style={{
                      backgroundImage: (block.type === 'TODAY_BTV' ? itemsToRender : filteredBanners)?.[previewIndex]?.img ? `url(${(block.type === 'TODAY_BTV' ? itemsToRender : filteredBanners)[previewIndex].img})` : 'none',
                      backgroundPosition: 'right top'
@@ -695,7 +694,6 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
                )}
             </div>
 
-            {/* [수정 포인트 3] 하단 리스트는 그대로 둡니다. 이제 메인 이미지를 밀어내지 않습니다. */}
             <div className="h-28 bg-[#161820] flex items-center px-4 gap-3 overflow-x-auto border-t border-slate-800 shrink-0">
                {(block.type === 'TODAY_BTV' ? itemsToRender : filteredBanners)?.map((item, idx) => (
                   <div key={idx} 
