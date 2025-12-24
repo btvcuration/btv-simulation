@@ -1657,6 +1657,8 @@ export default function App() {
   };
 
   const onDragStart = (e, index, type = 'BLOCK', data = null) => {
+    e.stopPropagation(); 
+
     dragItem.current = index; dragType.current = type; e.dataTransfer.effectAllowed = 'move';
     if (type === 'REQUEST' && data) e.dataTransfer.setData('requestData', JSON.stringify(data));
     if (type === 'GNB' || type === 'SUBMENU') e.dataTransfer.setData('menuId', data.id);
