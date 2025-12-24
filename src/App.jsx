@@ -666,7 +666,7 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
         <div className={`relative w-full h-auto bg-slate-900 rounded-lg overflow-hidden border ${block.type === 'TODAY_BTV' ? 'border-blue-500/30' : 'border-orange-500/30'} flex flex-col`}>
             
             {/* [수정] Today B tv: aspect-[22/10], 빅배너: aspect-[21/9] 적용 */}
-            <div className={`w-full ${block.type === 'TODAY_BTV' ? 'aspect-[22/10]' : 'aspect-[21/9]'} bg-cover relative group cursor-pointer`}
+            <div className={`w-full ${block.type === 'TODAY_BTV' ? 'aspect-[22/10]' : 'aspect-[21/7]'} bg-cover relative group cursor-pointer`}
                  style={{
                      backgroundImage: (block.type === 'TODAY_BTV' ? itemsToRender : filteredBanners)?.[previewIndex]?.img ? `url(${(block.type === 'TODAY_BTV' ? itemsToRender : filteredBanners)[previewIndex].img})` : 'none',
                      backgroundPosition: 'right top'
