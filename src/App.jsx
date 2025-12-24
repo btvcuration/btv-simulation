@@ -370,15 +370,20 @@ const useBtvData = (supabase, viewMode) => {
     };
 
     const reorderMenu = async (dragId, dropId, type) => {
+      // 1. 드래그 대상과 목표가 같으면 중단
       if (dragId === dropId) return;
       
+      // 2. ID를 문자열로 변환하여 안전하게 비교 (핵심 수정)
+      const strDragId = String(dragId);
+      const strDropId = String(dropId);
+  
       // 깊은 복사로 새 리스트 생성
       const newList = JSON.parse(JSON.stringify(gnbList));
   
       if (type === 'GNB') {
-        // [1] GNB (1뎁스) 순서 변경
-        const dragIndex = newList.findIndex(i => i.id === dragId);
-        const dropIndex = newList.findIndex(i => i.id === dropId);
+        // [GNB 순서 변경]
+        const dragIndex = newList.findIndex(i => String(i.id) === strDragId);
+        const dropIndex = newList.findIndex(i => String(i.id) === strDropId);
         
         if (dragIndex > -1 && dropIndex > -1) {
           const [dragItem] = newList.splice(dragIndex, 1);
@@ -392,7 +397,7 @@ const useBtvData = (supabase, viewMode) => {
           }
         }
       } else {
-        // [2] SUBMENU (2뎁스) 순서 변경
+        // [SUBMENU 순서 변경]
         
         let sourceGnb = null;
         let sourceIndex = -1;
@@ -401,7 +406,7 @@ const useBtvData = (supabase, viewMode) => {
   
         // 1. 출발지(Source) 찾기
         for (let gnb of newList) {
-          const idx = gnb.children.findIndex(c => c.id === dragId);
+          const idx = gnb.children.findIndex(c => String(c.id) === strDragId);
           if (idx > -1) {
             sourceGnb = gnb;
             sourceIndex = idx;
@@ -411,7 +416,7 @@ const useBtvData = (supabase, viewMode) => {
   
         // 2. 목적지(Target) 찾기
         for (let gnb of newList) {
-          const idx = gnb.children.findIndex(c => c.id === dropId);
+          const idx = gnb.children.findIndex(c => String(c.id) === strDropId);
           if (idx > -1) {
             targetGnb = gnb;
             targetIndex = idx;
@@ -419,14 +424,14 @@ const useBtvData = (supabase, viewMode) => {
           }
         }
   
-        // 예외처리: 상위 메뉴(GNB) 헤더 위로 드롭 시 해당 그룹 맨 앞으로 이동
+        // 예외: 하위 메뉴를 '상위 메뉴(GNB) 이름' 위로 드래그했을 때 (해당 그룹 맨 앞으로 이동)
         if (!targetGnb) {
-           const gnbHeaderIndex = newList.findIndex(g => g.id === dropId);
+           const gnbHeaderIndex = newList.findIndex(g => String(g.id) === strDropId);
            if (gnbHeaderIndex > -1 && sourceGnb) {
                const [item] = sourceGnb.children.splice(sourceIndex, 1);
                newList[gnbHeaderIndex].children.unshift(item);
                setGnbList(newList);
-               // DB 업데이트
+               
                if (!USE_MOCK_DATA) {
                  newList[gnbHeaderIndex].children.forEach(async (child, index) => {
                    await supabase.from('gnb_menus').update({ sort_order: index, parent_id: newList[gnbHeaderIndex].id }).eq('id', child.id);
@@ -434,22 +439,25 @@ const useBtvData = (supabase, viewMode) => {
                }
                return;
            }
-           return;
+           return; // 목적지 식별 실패 시 종료
         }
   
-        // 3. 실제 이동 로직
+        // 3. 이동 실행
         if (sourceGnb && targetGnb) {
           // (1) 아이템 추출
           const [draggedItem] = sourceGnb.children.splice(sourceIndex, 1);
   
           // (2) 아이템 삽입 
-          // [중요 수정] 인덱스 보정(-1) 코드를 제거했습니다.
-          // 같은 그룹 내에서 아래로 이동할 때, 보정하지 않아야 정상적으로 순서가 바뀝니다(Swap 효과).
+          // * 중요: 같은 그룹 내 이동 시, 아래로 이동할 때는 인덱스 보정을 하지 않아야 
+          //   "삭제된 자리"가 당겨지면서 자연스럽게 목표 위치 뒤로 가는 효과(Swap)가 납니다.
+          //   (이전 대화의 보정 로직 제거 유지)
+          
           targetGnb.children.splice(targetIndex, 0, draggedItem);
   
+          // (3) 상태 업데이트
           setGnbList(newList);
   
-          // (3) DB 업데이트
+          // (4) DB 업데이트
           if (!USE_MOCK_DATA) {
             // 타겟 그룹 정렬 업데이트
             targetGnb.children.forEach(async (child, index) => {
@@ -458,7 +466,7 @@ const useBtvData = (supabase, viewMode) => {
                 .eq('id', child.id);
             });
   
-            // 다른 그룹에서 이동해왔다면, 원래 그룹도 정렬 업데이트
+            // 다른 그룹 간 이동이었다면, 원래 그룹도 정렬 업데이트
             if (sourceGnb.id !== targetGnb.id) {
               sourceGnb.children.forEach(async (child, index) => {
                 await supabase.from('gnb_menus').update({ sort_order: index }).eq('id', child.id);
