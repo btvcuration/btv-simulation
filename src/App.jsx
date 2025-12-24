@@ -1487,6 +1487,28 @@ export default function App() {
     }
     return null;
   };
+  // [신규 추가] "상위 > 하위" 경로를 해석해서 정확한 ID를 찾는 함수
+  const findIdByPath = (list, pathStr) => {
+    if (!pathStr) return null;
+    
+    // " > " 를 기준으로 쪼갭니다 (예: ["무료", "무료 홈"])
+    const names = pathStr.split('>').map(s => s.trim());
+    
+    let currentList = list;
+    let targetId = null;
+  
+    for (const name of names) {
+      // 현재 레벨에서 이름이 일치하는 메뉴 찾기
+      const foundItem = currentList.find(item => item.name === name);
+      
+      if (!foundItem) return null; // 경로가 끊기면 실패
+      
+      targetId = foundItem.id; // 찾은 ID 저장
+      currentList = foundItem.children || []; // 자식 레벨로 이동
+    }
+    
+    return targetId;
+  };
 
   const handleConfirmAction = async () => {
     const { type, data } = modalState;
@@ -1517,11 +1539,21 @@ export default function App() {
     }
     else if (type === 'APPROVE') {
       const targetReqId = data.id;
-      const targetGnbName = data.gnb;
-      const targetGnbId = findGnbIdByName(gnbList, targetGnbName);
+      const targetGnbName = data.gnb; // 데이터 예시: "무료 > 무료 홈"
 
+      // [1순위] 경로 기반으로 정확하게 탐색 ("무료" -> "무료 홈" 순서로 찾기)
+      let targetGnbId = findIdByPath(gnbList, targetGnbName);
       if (!targetGnbId) {
-        alert(`오류: 요청된 메뉴 '${targetGnbName}'를 찾을 수 없습니다.\n이미 삭제된 메뉴일 수 있습니다.`);
+          const simpleName = targetGnbName.includes('>') 
+            ? targetGnbName.split('>').pop().trim() 
+            : targetGnbName;
+            
+          targetGnbId = findGnbIdByName(gnbList, simpleName);
+      }
+
+      // 그래도 못 찾으면 진짜 없는 것
+      if (!targetGnbId) {
+        alert(`오류: 요청된 메뉴 '${targetGnbName}'를 찾을 수 없습니다.\n해당 메뉴가 삭제되었거나 이름이 변경되었는지 확인해주세요.`);
         setModalState({ isOpen: false, type: null, data: null });
         return;
       }
