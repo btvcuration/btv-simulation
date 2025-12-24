@@ -370,44 +370,79 @@ const useBtvData = (supabase, viewMode) => {
     };
 
     const reorderMenu = async (dragId, dropId, type) => {
-        const newList = JSON.parse(JSON.stringify(gnbList));
-        if (dragId === dropId) return;
-
-        if (type === 'GNB') {
-            const dragIndex = newList.findIndex(i => i.id === dragId);
-            const [dragItem] = newList.splice(dragIndex, 1);
-            const dropIndex = newList.findIndex(i => i.id === dropId); 
-            newList.splice(dropIndex, 0, dragItem);
-            setGnbList(newList);
-
-            if (!USE_MOCK_DATA) {
-                newList.forEach(async (item, index) => {
-                    await supabase.from('gnb_menus').update({ sort_order: index }).eq('id', item.id);
-                });
-            }
-        } else {
-            for (let gnb of newList) {
-                const dragIndex = gnb.children.findIndex(c => c.id === dragId);
-                if (dragIndex > -1) {
-                    const [dragItem] = gnb.children.splice(dragIndex, 1);
-                    const dropIndex = gnb.children.findIndex(c => c.id === dropId);
-                    if (dropIndex > -1) {
-                        gnb.children.splice(dropIndex, 0, dragItem);
-                    } else {
-                        gnb.children.push(dragItem);
-                    }
-                    
-                    if (!USE_MOCK_DATA) {
-                        gnb.children.forEach(async (item, index) => {
-                            await supabase.from('gnb_menus').update({ sort_order: index }).eq('id', item.id);
-                        });
-                    }
-                    break;
-                }
-            }
-            setGnbList(newList);
+      const newList = JSON.parse(JSON.stringify(gnbList));
+      if (dragId === dropId) return;
+  
+      if (type === 'GNB') {
+        // 1. GNB(1뎁스) 순서 변경 로직 (기존과 동일)
+        const dragIndex = newList.findIndex(i => i.id === dragId);
+        if (dragIndex > -1) {
+          const [dragItem] = newList.splice(dragIndex, 1);
+          const dropIndex = newList.findIndex(i => i.id === dropId);
+          newList.splice(dropIndex, 0, dragItem);
+          setGnbList(newList);
+  
+          if (!USE_MOCK_DATA) {
+            newList.forEach(async (item, index) => {
+              await supabase.from('gnb_menus').update({ sort_order: index }).eq('id', item.id);
+            });
+          }
         }
-    }
+      } else {
+        // 2. SUBMENU(2뎁스) 순서 변경 로직 [수정됨]
+        
+        let draggedItem = null;
+        let sourceParentId = null;
+  
+        // (1) 먼저 드래그한 아이템을 찾아서 리스트에서 '제거'합니다.
+        for (let gnb of newList) {
+          const idx = gnb.children.findIndex(c => c.id === dragId);
+          if (idx > -1) {
+            [draggedItem] = gnb.children.splice(idx, 1);
+            sourceParentId = gnb.id; // 원래 부모 ID 저장
+            break;
+          }
+        }
+  
+        // (2) 드래그한 아이템이 존재하면, 목표 위치(dropId)를 찾아 '삽입'합니다.
+        if (draggedItem) {
+          for (let gnb of newList) {
+            const idx = gnb.children.findIndex(c => c.id === dropId);
+            if (idx > -1) {
+              // 목표 아이템 앞에 삽입
+              gnb.children.splice(idx, 0, draggedItem);
+              
+              // UI 업데이트
+              setGnbList(newList);
+  
+              // DB 업데이트 (Supabase)
+              if (!USE_MOCK_DATA) {
+                // 이동한 그룹(Target)의 순서 재정렬 및 부모 ID 업데이트
+                gnb.children.forEach(async (child, index) => {
+                  await supabase.from('gnb_menus')
+                    .update({ 
+                      sort_order: index,
+                      parent_id: gnb.id // 다른 그룹으로 이동했을 경우를 대비해 부모 ID도 갱신
+                    })
+                    .eq('id', child.id);
+                });
+  
+                // 만약 다른 그룹에서 이동해온 것이라면, 원래 그룹(Source)의 순서도 정비 (선택사항)
+                if (sourceParentId !== gnb.id) {
+                   const sourceGnb = newList.find(g => g.id === sourceParentId);
+                   if (sourceGnb) {
+                       sourceGnb.children.forEach(async (child, index) => {
+                           await supabase.from('gnb_menus').update({ sort_order: index }).eq('id', child.id);
+                       });
+                   }
+                }
+              }
+              return; // 작업 완료 후 종료
+            }
+          }
+        }
+      }
+    };
   
     const moveBlock = (index, direction) => {
         // 읽기 전용이거나 히스토리 모드일 때는 작동하지 않음
