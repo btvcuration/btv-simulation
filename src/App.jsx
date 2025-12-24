@@ -895,6 +895,7 @@ export default function App() {
   const [editTabNameData, setEditTabNameData] = useState({ blockId: null, tabIndex: null, name: '' });
   const [scheduleDate, setScheduleDate] = useState('');
   const [requestTitle, setRequestTitle] = useState('');
+  const [requestDescription, setRequestDescription] = useState('');
   const [diffSummary, setDiffSummary] = useState([]);
   const [menuNameInput, setMenuNameInput] = useState('');
   const [isDivider, setIsDivider] = useState(false);
@@ -1140,7 +1141,19 @@ export default function App() {
   const handleAddTab = (blockId) => { setBlocks(prev => prev.map(b => { if (b.id !== blockId) return b; const newTabs = [...(b.tabs || [])]; newTabs.push({ id: `tab-new-${Date.now()}`, name: `새 탭 ${newTabs.length + 1}`, contentId: '', items: [1, 2, 3, 4].map(i => ({ title: `콘텐츠 ${i}` })) }); return { ...b, tabs: newTabs }; })); };
   const handleEditTabName = (blockId, tabIndex, currentName) => { setEditTabNameData({ blockId, tabIndex, name: currentName }); setModalState({ isOpen: true, type: 'EDIT_TAB_NAME', data: null }); };
   const saveTabName = () => { const { blockId, tabIndex, name } = editTabNameData; setBlocks(prev => prev.map(b => { if (b.id !== blockId) return b; const newTabs = [...b.tabs]; newTabs[tabIndex] = { ...newTabs[tabIndex], name }; return { ...b, tabs: newTabs }; })); setModalState({ ...modalState, isOpen: false }); };
-  const handleOpenSaveModal = () => { const today = new Date(); today.setDate(today.getDate() + 3); setScheduleDate(today.toISOString().split('T')[0]); setRequestTitle(`[편성요청] ${currentMenuPath} 정기 개편`); const diffs = generateDiffs(); setDiffSummary(diffs.length > 0 ? diffs : [{ type: '알림', block: { title: '-' }, desc: '변경 사항이 없습니다.' }]); setModalState({ isOpen: true, type: 'SAVE', data: null }); };
+  const handleOpenSaveModal = () => { 
+    const today = new Date(); 
+    today.setDate(today.getDate() + 3); 
+    setScheduleDate(today.toISOString().split('T')[0]); 
+    setRequestTitle(`[편성요청] ${currentMenuPath} 정기 개편`); 
+    setRequestDescription(''); // [신규] 상세 설명 초기화
+    
+    const diffs = generateDiffs(); 
+    // 변경 사항이 없어도 저장은 가능하게 하되, 요약에는 '변경 사항 없음' 표시
+    setDiffSummary(diffs.length > 0 ? diffs : []); 
+    
+    setModalState({ isOpen: true, type: 'SAVE', data: null }); 
+  };
 
   const handleCreateRequest = async () => {
     if (!newRequestData.headline || !newRequestData.requester) return alert('요청자 및 제목을 입력해주세요.');
@@ -1309,15 +1322,54 @@ export default function App() {
       setRequests([]);
     }
     else if (type === 'SAVE') {
+      
+      // [수정] 1. 상세 설명과 자동 변경 내역 병합
+      const manualChange = requestDescription ? [{ type: '설명', desc: requestDescription }] : [];
+      // 변경 내역이 없으면 '변경 사항 없음'이라도 넣어줌
+      const autoChanges = diffSummary.length > 0 ? diffSummary : [{ type: '알림', desc: '자동 감지된 블록 변경 사항이 없습니다.' }];
+      
+      const finalChanges = [...manualChange, ...autoChanges];
+
       if (USE_MOCK_DATA) {
         alert('(Mock) 저장 완료 흉내');
-        const newSavedReq = { id: `saved-${Date.now()}`, title: requestTitle, status: 'PENDING', createdAt: new Date().toISOString().split('T')[0], date: scheduleDate, requester: '관리자 (Mock)', changes: diffSummary, menuPath: currentMenuPath, originalSnapshot: JSON.parse(JSON.stringify(originalBlocks)), snapshot: JSON.parse(JSON.stringify(blocks)), snapshot_new: JSON.parse(JSON.stringify(blocks)) };
+        const newSavedReq = { 
+            id: `saved-${Date.now()}`, 
+            title: requestTitle, 
+            status: 'PENDING', 
+            createdAt: new Date().toISOString().split('T')[0], 
+            date: scheduleDate, 
+            requester: '관리자 (Mock)', 
+            changes: finalChanges, // [중요] 합친 내역 저장
+            menuPath: currentMenuPath, 
+            originalSnapshot: JSON.parse(JSON.stringify(originalBlocks)), 
+            snapshot: JSON.parse(JSON.stringify(blocks)), 
+            snapshot_new: JSON.parse(JSON.stringify(blocks)) 
+        };
         setRequests(prev => [newSavedReq, ...prev]);
       } else {
         if (!supabase) return;
+        
         const snapshot = blocks.map((b, idx) => ({ ...b, sort_order: idx }));
-        const { error } = await supabase.from('requests').insert({ requester: '관리자', title: requestTitle, gnb_target: currentMenuPath, snapshot_new: snapshot, snapshot_original: originalBlocks, status: 'PENDING' });
-        if (!error) { alert('편성 요청이 저장되었습니다.'); window.location.reload(); } else { alert('저장 실패'); }
+        
+        // [중요] 실제 DB insert 시 'changes' 컬럼에 JSON 데이터 저장
+        // (Supabase requests 테이블에 changes 컬럼(jsonb 타입)이 있어야 합니다)
+        const { error } = await supabase.from('requests').insert({ 
+            requester: '관리자', 
+            title: requestTitle, 
+            gnb_target: currentMenuPath, 
+            snapshot_new: snapshot, 
+            snapshot_original: originalBlocks, 
+            status: 'PENDING',
+            changes: finalChanges, // [추가됨] 변경 내역 저장
+            description: requestDescription // 필요하다면 description 컬럼에도 저장
+        });
+        
+        if (!error) { 
+            alert('편성 요청이 저장되었습니다.'); 
+            window.location.reload(); 
+        } else { 
+            alert('저장 실패: ' + error.message); 
+        }
       }
     }
     else if (type === 'APPROVE') {
@@ -2066,7 +2118,41 @@ export default function App() {
                 {modalState.type === 'DELETE_REQUEST' && (<div className="text-center p-4"><AlertTriangle className="mx-auto text-red-500 mb-2" size={32} /><p className="text-white font-bold mb-1">요청을 삭제하시겠습니까?</p><p className="text-xs text-slate-400">삭제 후에는 복구할 수 없습니다.</p></div>)}
                 
                 {/* 10. 저장 (SAVE) */}
-                {modalState.type === 'SAVE' && (<div className="space-y-4"><div><label className="block text-xs font-bold text-slate-500 mb-1">요청 제목</label><input type="text" value={requestTitle} onChange={e => setRequestTitle(e.target.value)} className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white" /></div>{diffSummary.length > 0 && <div className="bg-[#100d1d] p-2 rounded max-h-32 overflow-y-auto">{diffSummary.map((d, i) => <div key={i} className="text-xs text-slate-400">• {d.desc}</div>)}</div>}</div>)}
+                {modalState.type === 'SAVE' && (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 mb-1">요청 제목</label>
+                      <input type="text" value={requestTitle} onChange={e => setRequestTitle(e.target.value)} className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-[#7387ff]" />
+                    </div>
+                    
+                    {/* [신규] 상세 설명 입력란 추가 */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 mb-1">상세 설명 (선택)</label>
+                      <textarea 
+                        value={requestDescription} 
+                        onChange={e => setRequestDescription(e.target.value)} 
+                        placeholder="이번 변경 건에 대한 상세한 설명이나 사유를 적어주세요."
+                        className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white outline-none focus:border-[#7387ff] h-24 resize-none"
+                      />
+                    </div>
+
+                    <div className="bg-[#100d1d] p-3 rounded border border-[#2e3038]">
+                        <p className="text-xs font-bold text-slate-500 mb-2">자동 감지된 변경 내역</p>
+                        {diffSummary.length > 0 ? (
+                            <div className="max-h-32 overflow-y-auto space-y-1">
+                                {diffSummary.map((d, i) => (
+                                    <div key={i} className="text-xs text-slate-400 flex items-start gap-1.5">
+                                        <span className={`shrink-0 px-1 rounded text-[10px] ${d.type === '신규' ? 'bg-blue-500/20 text-blue-400' : d.type === '삭제' ? 'bg-red-500/20 text-red-400' : 'bg-orange-500/20 text-orange-400'}`}>{d.type}</span>
+                                        <span>{d.desc}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="text-xs text-slate-600">변경 사항이 없습니다.</p>
+                        )}
+                    </div>
+                  </div>
+                )}
                 
                 {/* 11. 반영 승인 (APPROVE) */}
                 {modalState.type === 'APPROVE' && (
