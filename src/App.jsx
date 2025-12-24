@@ -372,11 +372,11 @@ const useBtvData = (supabase, viewMode) => {
     const reorderMenu = async (dragId, dropId, type) => {
       if (dragId === dropId) return;
       
-      // 깊은 복사로 새 리스트 생성 (기존 상태 보존)
+      // 깊은 복사로 새 리스트 생성
       const newList = JSON.parse(JSON.stringify(gnbList));
   
       if (type === 'GNB') {
-        // [1] GNB (1뎁스) 순서 변경 로직
+        // [1] GNB (1뎁스) 순서 변경
         const dragIndex = newList.findIndex(i => i.id === dragId);
         const dropIndex = newList.findIndex(i => i.id === dropId);
         
@@ -385,7 +385,6 @@ const useBtvData = (supabase, viewMode) => {
           newList.splice(dropIndex, 0, dragItem);
           setGnbList(newList);
   
-          // 실제 DB 업데이트
           if (!USE_MOCK_DATA) {
             newList.forEach(async (item, index) => {
               await supabase.from('gnb_menus').update({ sort_order: index }).eq('id', item.id);
@@ -393,7 +392,7 @@ const useBtvData = (supabase, viewMode) => {
           }
         }
       } else {
-        // [2] SUBMENU (2뎁스) 순서 변경 및 이동 로직 (완전 수정됨)
+        // [2] SUBMENU (2뎁스) 순서 변경
         
         let sourceGnb = null;
         let sourceIndex = -1;
@@ -410,7 +409,7 @@ const useBtvData = (supabase, viewMode) => {
           }
         }
   
-        // 2. 목적지(Target) 찾기 (떨어뜨린 아이템 기준)
+        // 2. 목적지(Target) 찾기
         for (let gnb of newList) {
           const idx = gnb.children.findIndex(c => c.id === dropId);
           if (idx > -1) {
@@ -420,16 +419,14 @@ const useBtvData = (supabase, viewMode) => {
           }
         }
   
-        // 예외 처리: 하위 메뉴를 '상위 메뉴(GNB) 이름' 위로 드래그했을 때 (해당 그룹 맨 앞으로 이동)
+        // 예외처리: 상위 메뉴(GNB) 헤더 위로 드롭 시 해당 그룹 맨 앞으로 이동
         if (!targetGnb) {
            const gnbHeaderIndex = newList.findIndex(g => g.id === dropId);
            if (gnbHeaderIndex > -1 && sourceGnb) {
                const [item] = sourceGnb.children.splice(sourceIndex, 1);
-               newList[gnbHeaderIndex].children.unshift(item); // 맨 앞에 추가
-               
+               newList[gnbHeaderIndex].children.unshift(item);
                setGnbList(newList);
-               
-               // DB 업데이트 (이동한 그룹만 정렬)
+               // DB 업데이트
                if (!USE_MOCK_DATA) {
                  newList[gnbHeaderIndex].children.forEach(async (child, index) => {
                    await supabase.from('gnb_menus').update({ sort_order: index, parent_id: newList[gnbHeaderIndex].id }).eq('id', child.id);
@@ -437,36 +434,31 @@ const useBtvData = (supabase, viewMode) => {
                }
                return;
            }
-           return; // 목적지를 못 찾았으면 종료
+           return;
         }
   
-        // 3. 실제 이동 로직 실행
+        // 3. 실제 이동 로직
         if (sourceGnb && targetGnb) {
-          // (1) 원래 위치에서 아이템 추출
+          // (1) 아이템 추출
           const [draggedItem] = sourceGnb.children.splice(sourceIndex, 1);
   
-          // (2) [핵심 보정] 같은 그룹 내에서 "위 -> 아래"로 이동 시 인덱스 보정
-          // 이유: 위쪽 아이템이 빠지면서 아래쪽 아이템들의 인덱스가 1씩 당겨졌기 때문
-          if (sourceGnb.id === targetGnb.id && sourceIndex < targetIndex) {
-              targetIndex--; 
-          }
-  
-          // (3) 목표 위치에 삽입
+          // (2) 아이템 삽입 
+          // [중요 수정] 인덱스 보정(-1) 코드를 제거했습니다.
+          // 같은 그룹 내에서 아래로 이동할 때, 보정하지 않아야 정상적으로 순서가 바뀝니다(Swap 효과).
           targetGnb.children.splice(targetIndex, 0, draggedItem);
   
-          // (4) 상태 업데이트
           setGnbList(newList);
   
-          // (5) DB 업데이트
+          // (3) DB 업데이트
           if (!USE_MOCK_DATA) {
-            // 변경된 타겟 그룹 정렬 업데이트
+            // 타겟 그룹 정렬 업데이트
             targetGnb.children.forEach(async (child, index) => {
               await supabase.from('gnb_menus')
                 .update({ sort_order: index, parent_id: targetGnb.id })
                 .eq('id', child.id);
             });
   
-            // 만약 다른 그룹에서 이동해왔다면, 원래 그룹(빈자리)도 정렬 업데이트
+            // 다른 그룹에서 이동해왔다면, 원래 그룹도 정렬 업데이트
             if (sourceGnb.id !== targetGnb.id) {
               sourceGnb.children.forEach(async (child, index) => {
                 await supabase.from('gnb_menus').update({ sort_order: index }).eq('id', child.id);
