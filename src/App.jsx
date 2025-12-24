@@ -370,18 +370,18 @@ const useBtvData = (supabase, viewMode) => {
     };
 
     const reorderMenu = async (dragId, dropId, type) => {
-      const newList = JSON.parse(JSON.stringify(gnbList));
       if (dragId === dropId) return;
+      const newList = JSON.parse(JSON.stringify(gnbList));
   
       if (type === 'GNB') {
-        // 1. GNB(1뎁스) 순서 변경 로직 (기존과 동일)
+        // 1. GNB 순서 변경 (기존 로직 유지)
         const dragIndex = newList.findIndex(i => i.id === dragId);
-        if (dragIndex > -1) {
+        const dropIndex = newList.findIndex(i => i.id === dropId);
+        if (dragIndex > -1 && dropIndex > -1) {
           const [dragItem] = newList.splice(dragIndex, 1);
-          const dropIndex = newList.findIndex(i => i.id === dropId);
           newList.splice(dropIndex, 0, dragItem);
           setGnbList(newList);
-  
+          
           if (!USE_MOCK_DATA) {
             newList.forEach(async (item, index) => {
               await supabase.from('gnb_menus').update({ sort_order: index }).eq('id', item.id);
@@ -389,55 +389,84 @@ const useBtvData = (supabase, viewMode) => {
           }
         }
       } else {
-        // 2. SUBMENU(2뎁스) 순서 변경 로직 [수정됨]
+        // 2. Sub Menu 순서 변경 (로직 개선됨)
         
+        // (1) 먼저 출발지(Source)와 목적지(Target)의 정보를 모두 찾습니다.
+        let sourceParent = null;
+        let sourceIndex = -1;
         let draggedItem = null;
-        let sourceParentId = null;
   
-        // (1) 먼저 드래그한 아이템을 찾아서 리스트에서 '제거'합니다.
+        let targetParent = null;
+        let targetIndex = -1;
+  
+        // 출발지 찾기
         for (let gnb of newList) {
           const idx = gnb.children.findIndex(c => c.id === dragId);
           if (idx > -1) {
-            [draggedItem] = gnb.children.splice(idx, 1);
-            sourceParentId = gnb.id; // 원래 부모 ID 저장
+            sourceParent = gnb;
+            sourceIndex = idx;
+            draggedItem = gnb.children[idx];
             break;
           }
         }
   
-        // (2) 드래그한 아이템이 존재하면, 목표 위치(dropId)를 찾아 '삽입'합니다.
-        if (draggedItem) {
-          for (let gnb of newList) {
-            const idx = gnb.children.findIndex(c => c.id === dropId);
-            if (idx > -1) {
-              // 목표 아이템 앞에 삽입
-              gnb.children.splice(idx, 0, draggedItem);
-              
-              // UI 업데이트
-              setGnbList(newList);
+        // 목적지 찾기
+        for (let gnb of newList) {
+          const idx = gnb.children.findIndex(c => c.id === dropId);
+          if (idx > -1) {
+            targetParent = gnb;
+            targetIndex = idx;
+            break;
+          }
+        }
   
-              // DB 업데이트 (Supabase)
-              if (!USE_MOCK_DATA) {
-                // 이동한 그룹(Target)의 순서 재정렬 및 부모 ID 업데이트
-                gnb.children.forEach(async (child, index) => {
-                  await supabase.from('gnb_menus')
-                    .update({ 
-                      sort_order: index,
-                      parent_id: gnb.id // 다른 그룹으로 이동했을 경우를 대비해 부모 ID도 갱신
-                    })
-                    .eq('id', child.id);
-                });
+        // 예외 처리: 하위 메뉴를 상위 메뉴(GNB) 헤더 위로 드래그했을 경우 (해당 그룹의 첫 번째로 이동)
+        if (!targetParent) {
+           const targetGnbIndex = newList.findIndex(g => g.id === dropId);
+           if (targetGnbIndex > -1 && draggedItem) {
+               sourceParent.children.splice(sourceIndex, 1); // 기존 위치 삭제
+               newList[targetGnbIndex].children.unshift(draggedItem); // 새 그룹 맨 앞에 추가
+               setGnbList(newList);
+               // (DB 업데이트 로직은 아래와 동일하므로 생략 가능하거나 함수화 추천)
+               return;
+           }
+           return; // 목적지를 못 찾았으면 종료
+        }
   
-                // 만약 다른 그룹에서 이동해온 것이라면, 원래 그룹(Source)의 순서도 정비 (선택사항)
-                if (sourceParentId !== gnb.id) {
-                   const sourceGnb = newList.find(g => g.id === sourceParentId);
-                   if (sourceGnb) {
-                       sourceGnb.children.forEach(async (child, index) => {
-                           await supabase.from('gnb_menus').update({ sort_order: index }).eq('id', child.id);
-                       });
-                   }
-                }
-              }
-              return; // 작업 완료 후 종료
+        // (2) 이동 실행
+        if (sourceParent && targetParent && draggedItem) {
+          // 기존 위치에서 삭제
+          sourceParent.children.splice(sourceIndex, 1);
+  
+          // 삽입 위치 보정 로직 (핵심!)
+          // 같은 부모 내에서 "위에서 아래로" 내리는 경우, 삭제로 인해 인덱스가 하나 밀렸으므로 원래 타겟 위치 그대로 넣으면 됨 (시각적으로는 타겟 뒤로 감)
+          // 다른 경우(아래에서 위로, 혹은 다른 그룹)는 타겟 인덱스에 넣으면 됨
+          let insertIndex = targetIndex;
+          
+          // 같은 부모이면서, 아래로 이동했을 때만 인덱스 조정이 필요없음(삭제된 만큼 당겨졌으므로). 
+          // 하지만 직관적인 "Swap" 느낌을 위해선 단순히 targetIndex에 넣는 것이 가장 자연스럽습니다.
+          // (A를 B에 드롭 -> B 자리에 A가 오고 B는 밀림)
+          
+          targetParent.children.splice(insertIndex, 0, draggedItem);
+  
+          setGnbList(newList);
+  
+          // (3) DB 업데이트
+          if (!USE_MOCK_DATA) {
+            // 변경된 그룹의 순서 재정렬
+            targetParent.children.forEach(async (child, index) => {
+              await supabase.from('gnb_menus')
+                .update({ sort_order: index, parent_id: targetParent.id })
+                .eq('id', child.id);
+            });
+  
+            // 만약 다른 그룹에서 이동해왔다면, 원래 그룹도 순서 재정렬
+            if (sourceParent.id !== targetParent.id) {
+              sourceParent.children.forEach(async (child, index) => {
+                await supabase.from('gnb_menus')
+                  .update({ sort_order: index })
+                  .eq('id', child.id);
+              });
             }
           }
         }
