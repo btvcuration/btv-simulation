@@ -485,19 +485,13 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
   const bannerDragItem = useRef(null);
   const bannerDragOverItem = useRef(null);
 
-  // [Helper] 날짜 유효성 체크 (만료 옵션 적용)
+  // [Helper] 날짜 유효성 체크
   const isBannerActive = (item) => {
-    // 1. 만료된 배너 보기 옵션이 켜져있으면 무조건 통과
     if (showExpired) return true;
-    
-    // 2. 기간 설정이 없으면 무조건 통과
     if (!item.startDate && !item.endDate) return true;
-
-    // 3. 날짜 비교
     const today = new Date().toISOString().split('T')[0];
     const start = item.startDate || '0000-00-00';
     const end = item.endDate || '9999-12-31';
-
     return today >= start && today <= end;
   };
 
@@ -513,172 +507,60 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
   else if (isBannerBlock) blockStyle = BLOCK_STYLES.BANNER;
   else if (isToday) blockStyle = BLOCK_STYLES.TODAY;
 
-  const togglePreview = (e) => {
-    e.stopPropagation();
-    if (readOnly || !onUpdate) return;
-    onUpdate({ showPreview: !block.showPreview });
-  };
+  const togglePreview = (e) => { e.stopPropagation(); if (readOnly || !onUpdate) return; onUpdate({ showPreview: !block.showPreview }); };
 
   const addBanner = (e, type) => {
-    e.stopPropagation();
-    if (readOnly || !onUpdate) return;
+    e.stopPropagation(); if (readOnly || !onUpdate) return;
     const today = new Date().toISOString().split('T')[0];
     const newBanner = { id: `new-bn-${Date.now()}`, type: type, title: '배너', landingType: '', landingValue: '', img: '', eventId: '', isTarget: false, targetSeg: '', remarks: '', jiraLink: '', startDate: today, endDate: '9999-12-31' };
     
-    if (block.type === 'BIG_BANNER') {
-        const currentBanners = block.banners || [];
-        onUpdate({ banners: [newBanner, ...currentBanners] });
-    } else if (block.type === 'TAB') {
-        const newTabs = [...block.tabs];
-        const currentTab = newTabs[activeTab];
-        const currentBanners = currentTab.leadingBanners || [];
-        newTabs[activeTab] = { ...currentTab, leadingBanners: [...currentBanners, newBanner] };
-        onUpdate({ tabs: newTabs });
-    } else if (['VERTICAL', 'HORIZONTAL', 'HORIZONTAL_MINI'].includes(block.type)) {
-        const currentBanners = block.leadingBanners || [];
-        onUpdate({ leadingBanners: [...currentBanners, newBanner] });
-    } else if (block.type === 'TODAY_BTV') {
-        const currentItems = block.items || [];
-        onUpdate({ items: [...currentItems, { ...newBanner, type: 'BANNER' }] });
-    } else {
-        const currentBanners = block.banners || (block.banner ? [block.banner] : []);
-        onUpdate({ banners: [...currentBanners, newBanner] });
-    }
+    if (block.type === 'BIG_BANNER') { onUpdate({ banners: [newBanner, ...(block.banners || [])] }); } 
+    else if (block.type === 'TAB') { const newTabs = [...block.tabs]; newTabs[activeTab] = { ...newTabs[activeTab], leadingBanners: [...(newTabs[activeTab].leadingBanners || []), newBanner] }; onUpdate({ tabs: newTabs }); } 
+    else if (['VERTICAL', 'HORIZONTAL', 'HORIZONTAL_MINI'].includes(block.type)) { onUpdate({ leadingBanners: [...(block.leadingBanners || []), newBanner] }); } 
+    else if (block.type === 'TODAY_BTV') { onUpdate({ items: [...(block.items || []), { ...newBanner, type: 'BANNER' }] }); } 
+    else { onUpdate({ banners: [...(block.banners || (block.banner ? [block.banner] : [])), newBanner] }); }
     setIsBannerMenuOpen(false);
   };
 
-  const addContentToToday = (e) => {
-      e.stopPropagation();
-      if (readOnly || !onUpdate) return;
-      const today = new Date().toISOString().split('T')[0];
-      const newContent = { id: `new-ct-${Date.now()}`, type: 'CONTENT', title: '새 콘텐츠', img: '', seriesId: '', startDate: today, endDate: '9999-12-31' };
-      const currentItems = block.items || [];
-      onUpdate({ items: [...currentItems, newContent] });
-      setIsBannerMenuOpen(false);
-  };
+  const addContentToToday = (e) => { e.stopPropagation(); if (readOnly || !onUpdate) return; const today = new Date().toISOString().split('T')[0]; const newContent = { id: `new-ct-${Date.now()}`, type: 'CONTENT', title: '새 콘텐츠', img: '', seriesId: '', startDate: today, endDate: '9999-12-31' }; onUpdate({ items: [...(block.items || []), newContent] }); setIsBannerMenuOpen(false); };
 
-  const onBannerDragStart = (e, idx, listType) => {
-      if(readOnly) return;
-      e.stopPropagation();
-      bannerDragItem.current = { index: idx, type: listType };
-      e.dataTransfer.effectAllowed = 'move';
-  };
-
-  const onBannerDragEnter = (e, idx) => {
-      if(readOnly) return;
-      e.stopPropagation();
-      e.preventDefault();
-      bannerDragOverItem.current = idx;
-  };
-
+  const onBannerDragStart = (e, idx, listType) => { if(readOnly) return; e.stopPropagation(); bannerDragItem.current = { index: idx, type: listType }; e.dataTransfer.effectAllowed = 'move'; };
+  const onBannerDragEnter = (e, idx) => { if(readOnly) return; e.stopPropagation(); e.preventDefault(); bannerDragOverItem.current = idx; };
   const onBannerDrop = (e, listType) => {
-      if(readOnly) return;
-      if (!bannerDragItem.current) return;
-
-      e.stopPropagation();
-      e.preventDefault();
-      const dragIndex = bannerDragItem.current?.index;
-      const hoverIndex = bannerDragOverItem.current;
-      if (dragIndex === undefined || hoverIndex === null || dragIndex === hoverIndex) return;
-      if (bannerDragItem.current?.type !== listType) return;
-
-      if (block.type === 'TAB') {
-          const newTabs = [...block.tabs];
-          const currentTab = newTabs[activeTab];
-          const currentList = [...(currentTab.leadingBanners || [])];
-          const draggedItem = currentList[dragIndex];
-          currentList.splice(dragIndex, 1);
-          currentList.splice(hoverIndex, 0, draggedItem);
-          newTabs[activeTab] = { ...currentTab, leadingBanners: currentList };
-          onUpdate({ tabs: newTabs });
-      } else if (block.type === 'TODAY_BTV') {
-          const currentList = [...(block.items || [])];
-          const draggedItem = currentList[dragIndex];
-          currentList.splice(dragIndex, 1);
-          currentList.splice(hoverIndex, 0, draggedItem);
-          onUpdate({ items: currentList });
-      } else if (block.type === 'BIG_BANNER') {
-          const currentList = [...(block.banners || [])];
-          const draggedItem = currentList[dragIndex];
-          currentList.splice(dragIndex, 1);
-          currentList.splice(hoverIndex, 0, draggedItem);
-          onUpdate({ banners: currentList });
-      } else {
-          const listKey = listType === 'LEADING' ? 'leadingBanners' : 'banners';
-          const currentList = [...(block[listKey] || [])];
-          const draggedItem = currentList[dragIndex];
-          currentList.splice(dragIndex, 1);
-          currentList.splice(hoverIndex, 0, draggedItem);
-          onUpdate({ [listKey]: currentList });
-      }
-      bannerDragItem.current = null;
-      bannerDragOverItem.current = null;
+      if(readOnly || !bannerDragItem.current) return;
+      e.stopPropagation(); e.preventDefault();
+      const dragIndex = bannerDragItem.current?.index; const hoverIndex = bannerDragOverItem.current;
+      if (dragIndex === undefined || hoverIndex === null || dragIndex === hoverIndex || bannerDragItem.current?.type !== listType) return;
+      
+      // (드래그 앤 드롭 로직은 기존과 동일하므로 생략 없이 유지)
+      if (block.type === 'TAB') { const newTabs = [...block.tabs]; const currentList = [...(newTabs[activeTab].leadingBanners || [])]; const [dragged] = currentList.splice(dragIndex, 1); currentList.splice(hoverIndex, 0, dragged); newTabs[activeTab].leadingBanners = currentList; onUpdate({ tabs: newTabs }); }
+      else if (block.type === 'TODAY_BTV') { const currentList = [...(block.items || [])]; const [dragged] = currentList.splice(dragIndex, 1); currentList.splice(hoverIndex, 0, dragged); onUpdate({ items: currentList }); }
+      else if (block.type === 'BIG_BANNER') { const currentList = [...(block.banners || [])]; const [dragged] = currentList.splice(dragIndex, 1); currentList.splice(hoverIndex, 0, dragged); onUpdate({ banners: currentList }); }
+      else { const listKey = listType === 'LEADING' ? 'leadingBanners' : 'banners'; const currentList = [...(block[listKey] || [])]; const [dragged] = currentList.splice(dragIndex, 1); currentList.splice(hoverIndex, 0, dragged); onUpdate({ [listKey]: currentList }); }
+      bannerDragItem.current = null; bannerDragOverItem.current = null;
   };
 
-  const handleEditIdClick = (e) => {
-    e.stopPropagation();
-    if (readOnly || !onEditId) return;
-    const tabIndex = block.type === 'TAB' ? activeTab : null;
-    onEditId(tabIndex);
-  };
+  const handleEditIdClick = (e) => { e.stopPropagation(); if (readOnly || !onEditId) return; onEditId(block.type === 'TAB' ? activeTab : null); };
+  const handleBannerClick = (e, item, index = null, isLeading = false) => { e.stopPropagation(); if(readOnly) return; if(item.type === 'CONTENT') { if(onEditContentId) onEditContentId(item, index); } else { if (onEditBannerId) onEditBannerId(item, index, isLeading, block.type === 'TAB' ? activeTab : null); } };
+  const handlePreviewSelect = (e, index) => { e.stopPropagation(); setPreviewIndex(index); }
+  const handleMainPreviewClick = (e) => { e.stopPropagation(); if(readOnly) return; const items = block.type === 'TODAY_BTV' ? block.items : block.banners; if (items && items[previewIndex]) handleBannerClick(e, items[previewIndex], previewIndex); }
+  const handleTabClick = (idx, name) => { setActiveTab(idx); }
 
-  const handleBannerClick = (e, item, index = null, isLeading = false) => {
-    e.stopPropagation();
-    if(readOnly) return;
-    if(item.type === 'CONTENT') {
-        if(onEditContentId) onEditContentId(item, index);
-    } else {
-        if (onEditBannerId) {
-            const tabIdx = block.type === 'TAB' ? activeTab : null;
-            onEditBannerId(item, index, isLeading, tabIdx);
-        }
-    }
-  };
-
-  const handlePreviewSelect = (e, index) => {
-      e.stopPropagation();
-      setPreviewIndex(index);
-  }
-
-  const handleMainPreviewClick = (e) => {
-      e.stopPropagation();
-      if(readOnly) return;
-      const items = block.type === 'TODAY_BTV' ? block.items : block.banners;
-      if (items && items[previewIndex]) {
-          handleBannerClick(e, items[previewIndex], previewIndex);
-      }
-  }
-
-  const handleTabClick = (idx, name) => {
-    setActiveTab(idx);
-  }
-
-  const getDisplayCount = (type) => {
-      return 3; 
-  };
+  const getDisplayCount = (type) => 3;
   const displayCount = getDisplayCount(block.type);
-
-  // [데이터 필터링] showExpired 체크 적용
   const currentIdType = block.type === 'TAB' && block.tabs && block.tabs[activeTab] ? block.tabs[activeTab]?.contentIdType : block.contentIdType;
   const currentIdValue = block.type === 'TAB' && block.tabs && block.tabs[activeTab] ? block.tabs[activeTab]?.contentId : block.contentId;
-  
   const itemsToRender = (Array.isArray(block.items) ? block.items : []).filter(item => (!hideTargets || !item.isTarget) && isBannerActive(item));
-  const tabsToRender = (Array.isArray(block.tabs) ? block.tabs : []).map(tab => ({
-      ...tab,
-      leadingBanners: (tab.leadingBanners || []).filter(b => (!hideTargets || !b.isTarget) && isBannerActive(b)),
-      items: (tab.items || []).filter(i => (!hideTargets || !i.isTarget) && isBannerActive(i))
-  }));
+  const tabsToRender = (Array.isArray(block.tabs) ? block.tabs : []).map(tab => ({ ...tab, leadingBanners: (tab.leadingBanners || []).filter(b => (!hideTargets || !b.isTarget) && isBannerActive(b)), items: (tab.items || []).filter(i => (!hideTargets || !i.isTarget) && isBannerActive(i)) }));
   const filteredBanners = (block.banners || []).filter(b => (!hideTargets || !b.isTarget) && isBannerActive(b));
   const filteredLeadingBanners = (block.leadingBanners || []).filter(b => (!hideTargets || !b.isTarget) && isBannerActive(b));
-
   const canAddBanner = !readOnly && ['VERTICAL', 'HORIZONTAL', 'HORIZONTAL_MINI', 'TAB', 'BIG_BANNER', 'BANNER_1', 'BANNER_2', 'BANNER_3', 'MENU_BLOCK', 'TODAY_BTV', 'LONG_BANNER', 'FULL_PROMOTION'].includes(block.type);
   const canPreview = ['VERTICAL', 'HORIZONTAL', 'HORIZONTAL_MINI', 'TAB', 'MULTI'].includes(block.type);
   const canEditId = !readOnly;
 
   const PosterItem = ({ type, text, isBanner, bannerType, img, onClick, onDragStart, onDragEnter, onDrop, draggable, isTarget, jiraLink, isSelected }) => {
     let sizeClass = "w-24 h-36"; 
-    let bgClass = "bg-slate-700";
-    let textClass = "text-slate-500";
+    let bgClass = "bg-slate-700"; let textClass = "text-slate-500";
     if (type === 'HORIZONTAL') sizeClass = "w-[200px] h-36";
     if (type === 'HORIZONTAL_MINI') sizeClass = "w-24 h-16";
     if (isBanner) {
@@ -691,22 +573,13 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
       if (bannerType === 'MENU') sizeClass = "w-[200px] h-[88px]"; 
       if (bannerType === 'FULL') sizeClass = "w-[200px] h-[160px]";
     }
-    if ((block.type === 'TODAY_BTV' || block.type === 'BIG_BANNER') && !isBanner) {
-        bgClass = `${CONTENT_STYLE.bg} ${CONTENT_STYLE.border} ${CONTENT_STYLE.hover} cursor-pointer`;
-        textClass = CONTENT_STYLE.text;
-    }
+    if ((block.type === 'TODAY_BTV' || block.type === 'BIG_BANNER') && !isBanner) { bgClass = `${CONTENT_STYLE.bg} ${CONTENT_STYLE.border} ${CONTENT_STYLE.hover} cursor-pointer`; textClass = CONTENT_STYLE.text; }
     const hasImage = img && img.length > 0;
     const displayText = typeof text === 'string' ? text : 'Content';
 
     return (
-      <div 
-        draggable={draggable && !readOnly} onDragStart={onDragStart} onDragEnter={onDragEnter} onDragOver={(e) => e.preventDefault()} onDrop={onDrop} onClick={onClick}
-        className={`flex-shrink-0 relative group/poster ${hasImage ? '' : ''} ${draggable && !readOnly ? 'cursor-grab active:cursor-grabbing' : ''}`}
-        title={readOnly ? '' : "클릭하여 미리보기"}
-      >
-        <div className={`${sizeClass} ${bgClass} ${isSelected ? 'ring-2 ring-[#7387ff] scale-[1.02]' : 'opacity-80 hover:opacity-100'} rounded border ${isBanner ? '' : 'border-slate-700'} overflow-hidden flex items-center justify-center ${textClass} text-[10px] font-medium relative bg-cover bg-center transition-all`}
-             style={hasImage ? { backgroundImage: `url(${img})` } : {}}
-        >
+      <div draggable={draggable && !readOnly} onDragStart={onDragStart} onDragEnter={onDragEnter} onDragOver={(e) => e.preventDefault()} onDrop={onDrop} onClick={onClick} className={`flex-shrink-0 relative group/poster ${draggable && !readOnly ? 'cursor-grab active:cursor-grabbing' : ''}`} title={readOnly ? '' : "클릭하여 미리보기"}>
+        <div className={`${sizeClass} ${bgClass} ${isSelected ? 'ring-2 ring-[#7387ff] scale-[1.02]' : 'opacity-80 hover:opacity-100'} rounded border ${isBanner ? '' : 'border-slate-700'} overflow-hidden flex items-center justify-center ${textClass} text-[10px] font-medium relative bg-cover bg-center transition-all`} style={hasImage ? { backgroundImage: `url(${img})` } : {}}>
           {!hasImage && block.type !== 'TODAY_BTV' && block.type !== 'BIG_BANNER' && displayText}
           <div className="absolute top-1 left-1 flex flex-col gap-1 z-10">
             {isBanner && <span className={`text-[8px] ${isTarget ? 'bg-pink-600' : 'bg-orange-600/80'} text-white px-1 rounded font-bold shadow`}>{isTarget ? 'TARGET' : 'BANNER'}</span>}
@@ -724,28 +597,10 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
     <div className={`p-4 rounded-lg border ${blockStyle.border} ${blockStyle.bg} ${containerStyle} ${dragStyle} relative transition-colors pt-6`}>
       {!readOnly && !isOriginal && (
          <div className="absolute top-0 left-0 right-0 h-6 flex justify-center items-center rounded-t-lg group/handle bg-white/5 hover:bg-white/10 transition-colors z-20">
-             {/* 모바일/클릭용 이동 버튼 (Hover 시 또는 항상 노출) */}
              <div className="flex items-center gap-4 text-slate-500">
-                 <button 
-                    onClick={(e) => { e.stopPropagation(); onMoveUp(); }} 
-                    disabled={isFirst}
-                    className={`p-0.5 hover:text-white hover:bg-slate-600 rounded transition-colors ${isFirst ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}`}
-                    title="위로 이동"
-                 >
-                    <ChevronDown size={12} className="rotate-180"/>
-                 </button>
-                 
-                 {/* 기존 드래그 핸들바 디자인 (시각적 요소) */}
+                 <button onClick={(e) => { e.stopPropagation(); onMoveUp(); }} disabled={isFirst} className={`p-0.5 hover:text-white hover:bg-slate-600 rounded transition-colors ${isFirst ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}`} title="위로 이동"><ChevronDown size={12} className="rotate-180"/></button>
                  <div className="w-8 h-1 bg-slate-600 rounded-full group-hover/handle:bg-slate-400 cursor-grab active:cursor-grabbing"></div>
-
-                 <button 
-                    onClick={(e) => { e.stopPropagation(); onMoveDown(); }} 
-                    disabled={isLast}
-                    className={`p-0.5 hover:text-white hover:bg-slate-600 rounded transition-colors ${isLast ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}`}
-                    title="아래로 이동"
-                 >
-                    <ChevronDown size={12} />
-                 </button>
+                 <button onClick={(e) => { e.stopPropagation(); onMoveDown(); }} disabled={isLast} className={`p-0.5 hover:text-white hover:bg-slate-600 rounded transition-colors ${isLast ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}`} title="아래로 이동"><ChevronDown size={12} /></button>
              </div>
          </div>
       )}
@@ -766,7 +621,6 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
                   <button onClick={(e) => { e.stopPropagation(); setIsBannerMenuOpen(!isBannerMenuOpen); }} className="flex items-center gap-1 px-1.5 py-0.5 rounded border border-orange-500/30 text-orange-400 bg-orange-500/10 hover:bg-orange-500/20 transition-colors cursor-pointer" title="추가"><PlusCircle size={10} /> 추가</button>
                   {isBannerMenuOpen && (
                     <div className="absolute top-full left-0 mt-1 bg-[#1e2029] border border-[#2e3038] rounded shadow-xl z-20 overflow-hidden flex flex-col w-28">
-                      {/* 1. 일반 블록일 때 (1단, 2단, 3단 배너) - FULL_PROMOTION 제외 추가 */}
                       {!isToday && !['MENU_BLOCK', 'BIG_BANNER', 'FULL_PROMOTION'].includes(block.type) && (
                         <>
                           <button onClick={(e) => addBanner(e, '1-COL')} className="px-2 py-2 text-[10px] text-left hover:bg-[#2e3038] text-slate-300 border-b border-[#2e3038]/50">1단 배너</button>
@@ -774,18 +628,8 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
                           <button onClick={(e) => addBanner(e, '3-COL')} className="px-2 py-2 text-[10px] text-left hover:bg-[#2e3038] text-slate-300">3단 배너</button>
                         </>
                       )}
-
-                      {/* 2. 메뉴 블록일 때 */}
-                      {block.type === 'MENU_BLOCK' && (
-                        <button onClick={(e) => addBanner(e, 'MENU')} className="px-2 py-2 text-[10px] text-left hover:bg-[#2e3038] text-slate-300">메뉴 배너</button>
-                      )}
-
-                      {/* 3. [NEW] 풀 프로모션 블록일 때 (새로 추가된 부분) */}
-                      {block.type === 'FULL_PROMOTION' && (
-                        <button onClick={(e) => addBanner(e, 'FULL')} className="px-2 py-2 text-[10px] text-left hover:bg-[#2e3038] text-slate-300">풀 프로모션 배너</button>
-                      )}
-
-                      {/* 4. Today B tv 또는 빅배너일 때 */}
+                      {block.type === 'MENU_BLOCK' && <button onClick={(e) => addBanner(e, 'MENU')} className="px-2 py-2 text-[10px] text-left hover:bg-[#2e3038] text-slate-300">메뉴 배너</button>}
+                      {block.type === 'FULL_PROMOTION' && <button onClick={(e) => addBanner(e, 'FULL')} className="px-2 py-2 text-[10px] text-left hover:bg-[#2e3038] text-slate-300">풀 프로모션 배너</button>}
                       {(block.type === 'TODAY_BTV' || block.type === 'BIG_BANNER') && (
                         <>
                           <button onClick={(e) => addBanner(e, '1-COL')} className="px-2 py-2 text-[10px] text-left hover:bg-[#2e3038] text-slate-300 border-b border-[#2e3038]/50">배너 추가</button>
@@ -810,23 +654,18 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
                       <span className="font-mono">{currentIdValue || 'ID 설정'}</span>
                     </button>
                   )}
-                  <button onClick={handleEditIdClick} className="px-2 py-0.5 text-slate-300 font-mono hover:text-white hover:bg-slate-700 transition-colors flex items-center gap-1" title="블록 설정">
-                    <Settings size={10} className="text-slate-400"/> 
-                  </button>
+                  <button onClick={handleEditIdClick} className="px-2 py-0.5 text-slate-300 font-mono hover:text-white hover:bg-slate-700 transition-colors flex items-center gap-1" title="블록 설정"><Settings size={10} className="text-slate-400"/> </button>
                 </div>
               )}
             </div>
           )}
         </div>
-        
-        <span className={`text-[10px] border px-1.5 py-0.5 rounded flex items-center gap-1 ${blockStyle.badge}`}>
-          {isMulti ? 'MULTI' : isToday ? 'TODAY' : block.type.includes('BANNER') || block.type === 'MENU_BLOCK' ? <ImageIcon size={10}/> : block.type === 'TAB' ? <Layers size={10}/> : <Grid size={10}/>}
-          {!isMulti && block.type}
-        </span>
+        <span className={`text-[10px] border px-1.5 py-0.5 rounded flex items-center gap-1 ${blockStyle.badge}`}>{isMulti ? 'MULTI' : isToday ? 'TODAY' : block.type.includes('BANNER') || block.type === 'MENU_BLOCK' ? <ImageIcon size={10}/> : block.type === 'TAB' ? <Layers size={10}/> : <Grid size={10}/>}{!isMulti && block.type}</span>
       </div>
 
       {(block.type === 'TODAY_BTV' || block.type === 'BIG_BANNER') && (
-        <div className={`relative w-full ${block.type === 'TODAY_BTV' ? 'h-[520px]' : 'h-[360px]'} bg-slate-900 rounded-lg overflow-hidden border ${block.type === 'TODAY_BTV' ? 'border-blue-500/30' : 'border-orange-500/30'} flex flex-col`}>
+        // [수정] 1. 고정 높이 제거하고 aspect-ratio 적용 (Today: 3/2, Big: 21/9)
+        <div className={`relative w-full h-auto ${block.type === 'TODAY_BTV' ? 'aspect-[3/2]' : 'aspect-[21/9]'} bg-slate-900 rounded-lg overflow-hidden border ${block.type === 'TODAY_BTV' ? 'border-blue-500/30' : 'border-orange-500/30'} flex flex-col`}>
             <div className="flex-1 bg-cover relative group cursor-pointer" 
                  style={{
                      backgroundImage: (block.type === 'TODAY_BTV' ? itemsToRender : filteredBanners)?.[previewIndex]?.img ? `url(${(block.type === 'TODAY_BTV' ? itemsToRender : filteredBanners)[previewIndex].img})` : 'none',
@@ -842,26 +681,16 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent"></div>
                
                {(block.type === 'TODAY_BTV' ? itemsToRender : filteredBanners)?.[previewIndex]?.isTarget && (
-                   <div className="absolute top-3 left-3 z-20">
-                       <span className="bg-pink-600 text-white text-[10px] font-bold px-2 py-1 rounded shadow-md flex items-center gap-1">
-                           <Target size={10} /> TARGET
-                       </span>
-                   </div>
+                   <div className="absolute top-3 left-3 z-20"><span className="bg-pink-600 text-white text-[10px] font-bold px-2 py-1 rounded shadow-md flex items-center gap-1"><Target size={10} /> TARGET</span></div>
                )}
 
                <div className="absolute bottom-4 left-4 z-10">
-                   <h3 className="text-white font-extrabold text-2xl drop-shadow-md">
-                       {(block.type === 'TODAY_BTV' ? itemsToRender : filteredBanners)?.[previewIndex]?.title || '타이틀'}
-                   </h3>
-                   {block.type === 'BIG_BANNER' && (
-                       <p className="text-slate-300 text-sm mt-1 line-clamp-2 max-w-[80%] bg-black/30 px-2 py-1 rounded backdrop-blur-sm">소개 문구 영역</p>
-                   )}
+                   <h3 className="text-white font-extrabold text-2xl drop-shadow-md">{(block.type === 'TODAY_BTV' ? itemsToRender : filteredBanners)?.[previewIndex]?.title || '타이틀'}</h3>
+                   {block.type === 'BIG_BANNER' && <p className="text-slate-300 text-sm mt-1 line-clamp-2 max-w-[80%] bg-black/30 px-2 py-1 rounded backdrop-blur-sm">소개 문구 영역</p>}
                </div>
 
                {!readOnly && (
-                   <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                       <span className="bg-black/50 text-white px-3 py-1.5 rounded-full text-xs flex items-center gap-1 backdrop-blur"><Edit3 size={12}/> 설정 편집</span>
-                   </div>
+                   <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"><span className="bg-black/50 text-white px-3 py-1.5 rounded-full text-xs flex items-center gap-1 backdrop-blur"><Edit3 size={12}/> 설정 편집</span></div>
                )}
             </div>
 
@@ -878,33 +707,10 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
                        style={item.img ? {backgroundImage: `url(${item.img})`} : {backgroundColor: item.type === 'CONTENT' ? '#1e293b' : 'rgba(249, 115, 22, 0.1)'}}
                   >
                       {!isOriginal && !readOnly && (
-                        <button 
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                const currentList = block.type === 'TODAY_BTV' ? [...(block.items || [])] : [...(block.banners || [])];
-                                currentList.splice(idx, 1);
-                                onUpdate(block.type === 'TODAY_BTV' ? { items: currentList } : { banners: currentList });
-                                if (previewIndex >= currentList.length) setPreviewIndex(Math.max(0, currentList.length - 1));
-                            }}
-                            className="absolute -top-1 -right-1 z-20 bg-[#2e3038] text-slate-400 hover:text-red-500 border border-slate-600 rounded-full p-0.5 opacity-0 group-hover/item:opacity-100 transition-opacity shadow-lg scale-75"
-                            title="삭제"
-                        >
-                            <Trash2 size={12} />
-                        </button>
+                        <button onClick={(e) => { e.stopPropagation(); const currentList = block.type === 'TODAY_BTV' ? [...(block.items || [])] : [...(block.banners || [])]; currentList.splice(idx, 1); onUpdate(block.type === 'TODAY_BTV' ? { items: currentList } : { banners: currentList }); if (previewIndex >= currentList.length) setPreviewIndex(Math.max(0, currentList.length - 1)); }} className="absolute -top-1 -right-1 z-20 bg-[#2e3038] text-slate-400 hover:text-red-500 border border-slate-600 rounded-full p-0.5 opacity-0 group-hover/item:opacity-100 transition-opacity shadow-lg scale-75" title="삭제"><Trash2 size={12} /></button>
                       )}
-
-                      {!item.img && (
-                          <div className={`flex items-center justify-center h-full text-center px-1 font-bold break-keep ${item.type === 'CONTENT' ? 'text-slate-300' : 'text-orange-300'}`}>
-                              <span className="text-[10px] line-clamp-2">{item.title}</span>
-                          </div>
-                      )}
-                      
-                      {item.isTarget && (
-                          <div className="absolute top-1 left-1 z-10">
-                              <span className="bg-pink-600 text-white text-[8px] font-bold px-1 rounded shadow-sm">TARGET</span>
-                          </div>
-                      )}
-                      
+                      {!item.img && <div className={`flex items-center justify-center h-full text-center px-1 font-bold break-keep ${item.type === 'CONTENT' ? 'text-slate-300' : 'text-orange-300'}`}><span className="text-[10px] line-clamp-2">{item.title}</span></div>}
+                      {item.isTarget && <div className="absolute top-1 left-1 z-10"><span className="bg-pink-600 text-white text-[8px] font-bold px-1 rounded shadow-sm">TARGET</span></div>}
                       <div className={`absolute bottom-0 left-0 right-0 text-[8px] text-white px-1 py-0.5 font-bold backdrop-blur-sm text-center truncate ${item.type === 'CONTENT' ? 'bg-slate-900/80' : 'bg-orange-900/80'}`}>{item.title}</div>
                   </div>
                ))}
@@ -918,18 +724,9 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
                <div className="w-full bg-[#100d1d] rounded-lg p-3 border border-slate-700/50">
                   <div className="flex gap-1 mb-3 border-b border-slate-700 overflow-x-auto items-center">
                     {tabsToRender.map((tab, idx) => (
-                      <button 
-                        key={tab.id || idx} 
-                        onClick={(e) => { e.stopPropagation(); handleTabClick(idx, tab.name); }} 
-                        className={`px-3 py-1.5 text-xs font-medium rounded-t-md transition-colors whitespace-nowrap flex items-center gap-1 group ${activeTab === idx ? 'bg-[#7387ff] text-white' : 'text-slate-500 hover:text-slate-300'}`}
-                      >
-                        {tab.name || `Tab ${idx + 1}`}
-                        {activeTab === idx && !isOriginal && !readOnly && <Edit3 size={8} className="opacity-50 group-hover:opacity-100" />}
-                      </button>
+                      <button key={tab.id || idx} onClick={(e) => { e.stopPropagation(); handleTabClick(idx, tab.name); }} className={`px-3 py-1.5 text-xs font-medium rounded-t-md transition-colors whitespace-nowrap flex items-center gap-1 group ${activeTab === idx ? 'bg-[#7387ff] text-white' : 'text-slate-500 hover:text-slate-300'}`}>{tab.name || `Tab ${idx + 1}`}{activeTab === idx && !isOriginal && !readOnly && <Edit3 size={8} className="opacity-50 group-hover:opacity-100" />}</button>
                     ))}
-                    {!isOriginal && !readOnly && (
-                        <button onClick={(e) => { e.stopPropagation(); onAddTab(); }} className="px-2 py-1 text-slate-500 hover:text-white hover:bg-slate-700 rounded transition-colors"><Plus size={12}/></button>
-                    )}
+                    {!isOriginal && !readOnly && <button onClick={(e) => { e.stopPropagation(); onAddTab(); }} className="px-2 py-1 text-slate-500 hover:text-white hover:bg-slate-700 rounded transition-colors"><Plus size={12}/></button>}
                   </div>
                   <div className="flex gap-2 overflow-x-auto flex-nowrap min-h-[100px] items-center pb-2">
                     {tabsToRender[activeTab]?.leadingBanners?.map((banner, idx) => (
@@ -943,7 +740,10 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
                {filteredBanners?.map((banner, idx) => (
                  <div key={`bn-${idx}`} className={block.type === 'BAND_BANNER' ? 'w-full shrink-0' : 'shrink-0'}>
                    {block.type === 'BAND_BANNER' ? (
-                      <div draggable={!isOriginal && !readOnly} onDragStart={(e) => onBannerDragStart(e, idx, 'BANNER')} onDragEnter={(e) => onBannerDragEnter(e, idx)} onDrop={(e) => onBannerDrop(e, 'BANNER')} onDragOver={(e) => e.preventDefault()} onClick={(e) => handleBannerClick(e, banner, idx)} className={`w-full h-24 ${BANNER_STYLE.bg} border ${banner.isTarget ? 'border-pink-500/50' : BANNER_STYLE.border} ${BANNER_STYLE.hover} cursor-pointer rounded flex items-center justify-center ${BANNER_STYLE.text} text-[10px] font-bold relative bg-cover bg-center transition-colors group/band`} style={banner.img ? { backgroundImage: `url(${banner.img})` } : {}}>
+                      <div draggable={!isOriginal && !readOnly} onDragStart={(e) => onBannerDragStart(e, idx, 'BANNER')} onDragEnter={(e) => onBannerDragEnter(e, idx)} onDrop={(e) => onBannerDrop(e, 'BANNER')} onDragOver={(e) => e.preventDefault()} onClick={(e) => handleBannerClick(e, banner, idx)} 
+                           // [수정] 2. 띠배너 고정높이(h-24) 제거 -> aspect-[8/1]
+                           className={`w-full h-auto aspect-[8/1] ${BANNER_STYLE.bg} border ${banner.isTarget ? 'border-pink-500/50' : BANNER_STYLE.border} ${BANNER_STYLE.hover} cursor-pointer rounded flex items-center justify-center ${BANNER_STYLE.text} text-[10px] font-bold relative bg-cover bg-center transition-colors group/band`} 
+                           style={banner.img ? { backgroundImage: `url(${banner.img})` } : {}}>
                         {!banner.img && (banner.title || '배너')}
                         <div className="absolute right-2 top-2 flex flex-col gap-1 items-end">{banner.isTarget && <span className="text-[8px] bg-pink-600 text-white px-1 rounded font-bold flex items-center gap-0.5"><Target size={6}/> TARGET</span>}{banner.landingType && <span className="text-[9px] bg-black/50 text-white px-1 rounded">{banner.landingType}</span>}{banner.jiraLink && <span className="text-[8px] bg-[#0052cc] text-white px-1 rounded flex items-center gap-0.5"><Link2 size={6}/> Jira</span>}</div>
                         {!isOriginal && !readOnly && <div className="absolute left-2 top-1/2 -translate-y-1/2 opacity-0 group-hover/band:opacity-50 text-white cursor-grab"><GripVertical size={16}/></div>}
@@ -955,23 +755,9 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
                         {!isOriginal && !readOnly && <div className="absolute top-2 right-2 opacity-0 group-hover/long:opacity-50 text-white cursor-grab"><GripVertical size={14}/></div>}
                       </div>
                    ) : block.type === 'FULL_PROMOTION' ? (
-                     /* [NEW] 풀 프로모션 배너 렌더링 (타입 'FULL' 전달) */
-                     <PosterItem 
-                       type="VERTICAL" 
-                       isBanner={true} 
-                       isTarget={banner.isTarget} 
-                       jiraLink={banner.jiraLink} 
-                       bannerType="FULL" 
-                       text={banner.title} 
-                       img={banner.img} 
-                       onClick={(e) => handleBannerClick(e, banner, idx)} 
-                       draggable={!isOriginal && !readOnly} 
-                       onDragStart={(e) => onBannerDragStart(e, idx, 'BANNER')} 
-                       onDragEnter={(e) => onBannerDragEnter(e, idx)} 
-                       onDrop={(e) => onBannerDrop(e, 'BANNER')} 
-                     />
+                      <PosterItem type="VERTICAL" isBanner={true} isTarget={banner.isTarget} jiraLink={banner.jiraLink} bannerType="FULL" text={banner.title} img={banner.img} onClick={(e) => handleBannerClick(e, banner, idx)} draggable={!isOriginal && !readOnly} onDragStart={(e) => onBannerDragStart(e, idx, 'BANNER')} onDragEnter={(e) => onBannerDragEnter(e, idx)} onDrop={(e) => onBannerDrop(e, 'BANNER')} />
                    ) : block.type === 'MENU_BLOCK' ? (
-                       <PosterItem type="VERTICAL" isBanner={true} isTarget={banner.isTarget} jiraLink={banner.jiraLink} bannerType={banner.type} text={banner.title} img={banner.img} onClick={(e) => handleBannerClick(e, banner, idx)} draggable={!isOriginal && !readOnly} onDragStart={(e) => onBannerDragStart(e, idx, 'BANNER')} onDragEnter={(e) => onBannerDragEnter(e, idx)} onDrop={(e) => onBannerDrop(e, 'BANNER')} />
+                        <PosterItem type="VERTICAL" isBanner={true} isTarget={banner.isTarget} jiraLink={banner.jiraLink} bannerType={banner.type} text={banner.title} img={banner.img} onClick={(e) => handleBannerClick(e, banner, idx)} draggable={!isOriginal && !readOnly} onDragStart={(e) => onBannerDragStart(e, idx, 'BANNER')} onDragEnter={(e) => onBannerDragEnter(e, idx)} onDrop={(e) => onBannerDrop(e, 'BANNER')} />
                    ) : (
                       <PosterItem type="VERTICAL" isBanner={true} isTarget={banner.isTarget} jiraLink={banner.jiraLink} bannerType={banner.type || (block.type === 'BANNER_1' ? '1-COL' : block.type === 'BANNER_2' ? '2-COL' : '3-COL')} text={banner.title} img={banner.img} onClick={(e) => handleBannerClick(e, banner, idx)} draggable={!isOriginal && !readOnly} onDragStart={(e) => onBannerDragStart(e, idx, 'BANNER')} onDragEnter={(e) => onBannerDragEnter(e, idx)} onDrop={(e) => onBannerDrop(e, 'BANNER')} />
                    )}
@@ -980,9 +766,7 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
                {filteredLeadingBanners?.map((banner, idx) => (
                  <PosterItem key={`lb-${idx}`} type={block.type} isBanner={true} isTarget={banner.isTarget} jiraLink={banner.jiraLink} bannerType={banner.type} text={banner.title || '배너'} img={banner.img} onClick={(e) => handleBannerClick(e, banner, idx, true)} draggable={!isOriginal && !readOnly} onDragStart={(e) => onBannerDragStart(e, idx, 'LEADING')} onDragEnter={(e) => onBannerDragEnter(e, idx)} onDrop={(e) => onBannerDrop(e, 'LEADING')} />
                ))}
-               {itemsToRender.slice(0, displayCount).map((item, idx) => (
-                 <PosterItem key={idx} type={block.type} text={item.title} />
-               ))}
+               {itemsToRender.slice(0, displayCount).map((item, idx) => <PosterItem key={idx} type={block.type} text={item.title} />)}
                {itemsToRender.length > displayCount && <div className="flex items-center text-slate-600 text-xs pl-1">...</div>}
              </>
            )}
