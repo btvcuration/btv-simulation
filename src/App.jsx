@@ -163,186 +163,139 @@ const generateSlug = (name) => {
     return name.toLowerCase().replace(/\s+/g, '-') + `-${Date.now().toString().slice(-4)}`;
 };
 
-// Mock Hook Implementation
+// Mock Hook Implementation (수정됨)
 const useBtvData = (supabase, viewMode) => {
     const [gnbList, setGnbList] = useState(INITIAL_GNB_TREE);
-    const [expandedMenuIds, setExpandedMenuIds] = useState(['2', '3']); 
+    const [expandedMenuIds, setExpandedMenuIds] = useState(['2', '3']);
     const [currentMenuPath, setCurrentMenuPath] = useState('홈');
-    const [currentMenuId, setCurrentMenuId] = useState('1');
+    
+    // [수정 1] 실제 DB 모드일 때는 초기값을 '1'이 아니라 null로 설정하여 400 에러 방지
+    const [currentMenuId, setCurrentMenuId] = useState(USE_MOCK_DATA ? '1' : null);
+    
     const [blocks, setBlocks] = useState(JSON.parse(JSON.stringify(MOCK_BLOCKS)));
-    const [originalBlocks, setOriginalBlocks] = useState(JSON.parse(JSON.stringify(MOCK_BLOCKS))); 
+    const [originalBlocks, setOriginalBlocks] = useState(JSON.parse(JSON.stringify(MOCK_BLOCKS)));
     const [requests, setRequests] = useState([...MOCK_REQUESTS]);
     const [isLoading, setIsLoading] = useState(false);
 
+    // 1. GNB 메뉴 가져오기
     const fetchGnb = async () => {
-      if (USE_MOCK_DATA) {
-        if(gnbList.length === 0 || gnbList === INITIAL_GNB_TREE) {
-            setGnbList(INITIAL_GNB_TREE);
-            setCurrentMenuPath(INITIAL_GNB_TREE[0].name);
-            setCurrentMenuId(INITIAL_GNB_TREE[0].id);
-        }
-        return;
-      }
-      
-      if (!supabase || !supabase.from) return;
-
-      const fetchGnb = async () => {
-      if (USE_MOCK_DATA) {
-        if(gnbList.length === 0 || gnbList === INITIAL_GNB_TREE) {
-            setGnbList(INITIAL_GNB_TREE);
-            setCurrentMenuPath(INITIAL_GNB_TREE[0].name);
-            setCurrentMenuId(INITIAL_GNB_TREE[0].id);
-        }
-        return;
-      }
-      
-      if (!supabase || !supabase.from) return;
-
-      // 1. 데이터 가져오기 (sort_order로 1차 정렬하지만 이것만으론 부족함)
-      const { data, error } = await supabase
-        .from('gnb_menus')
-        .select('*')
-        .order('sort_order', { ascending: true });
-      
-      if (data && data.length > 0) {
-        const tree = [];
-        const map = {};
-        
-        // 2. 맵 생성
-        data.forEach(item => { map[item.id] = { ...item, children: [] }; });
-        
-        // 3. 트리 구성
-        data.forEach(item => {
-            if (item.parent_id) {
-                if(map[item.parent_id]) map[item.parent_id].children.push(map[item.id]);
-            } else {
-                tree.push(map[item.id]);
+        if (USE_MOCK_DATA) {
+            if (gnbList.length === 0 || gnbList === INITIAL_GNB_TREE) {
+                setGnbList(INITIAL_GNB_TREE);
+                setCurrentMenuPath(INITIAL_GNB_TREE[0].name);
+                setCurrentMenuId(INITIAL_GNB_TREE[0].id);
             }
-        });
+            return;
+        }
 
-        // [핵심 수정] 4. 구성된 트리 내부를 sort_order 기준으로 '재정렬' (강제 줄세우기)
-        // 이 과정이 없으면 DB에서 순서가 바뀌어도 화면엔 반영이 안 될 수 있음
-        const sortNodes = (nodes) => {
-            return nodes.sort((a, b) => a.sort_order - b.sort_order).map(node => {
-                if (node.children && node.children.length > 0) {
-                    node.children = sortNodes(node.children); // 재귀 정렬
+        if (!supabase || !supabase.from) return;
+
+        const { data, error } = await supabase
+            .from('gnb_menus')
+            .select('*')
+            .order('sort_order', { ascending: true });
+
+        if (data && data.length > 0) {
+            const tree = [];
+            const map = {};
+
+            // 데이터 매핑
+            data.forEach(item => { map[item.id] = { ...item, children: [] }; });
+            data.forEach(item => {
+                if (item.parent_id && map[item.parent_id]) {
+                    map[item.parent_id].children.push(map[item.id]);
+                } else {
+                    tree.push(map[item.id]);
                 }
-                return node;
             });
-        };
 
-        const sortedTree = sortNodes(tree);
-        setGnbList(sortedTree);
+            // [중요] 화면에 그리기 전 sort_order 기준으로 확실하게 정렬 (DB 순서 꼬임 방지)
+            const sortNodes = (nodes) => {
+                return nodes.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)).map(node => {
+                    if (node.children && node.children.length > 0) {
+                        node.children = sortNodes(node.children);
+                    }
+                    return node;
+                });
+            };
+            const sortedTree = sortNodes(tree);
+            setGnbList(sortedTree);
 
-        // 초기 선택값 설정 로직
-        if (currentMenuId) {
-            const current = data.find(d => d.id === currentMenuId);
-            if (current) setCurrentMenuPath(current.name);
-            else {
+            // [수정 2] 초기 선택값 설정 (currentMenuId가 없으면 첫 번째 메뉴로 자동 설정)
+            if (!currentMenuId && sortedTree.length > 0) {
                 const home = sortedTree.find(m => m.name === '홈') || sortedTree[0];
-                if(home) { setCurrentMenuId(home.id); setCurrentMenuPath(home.name); }
+                setCurrentMenuId(home.id);
+                setCurrentMenuPath(home.name);
             }
         }
-      }
     };
 
     useEffect(() => {
         fetchGnb();
     }, [supabase]);
 
+    // 2. 블록 가져오기
     useEffect(() => {
+        // [수정 3] ID가 없으면 API 호출 자체를 막아서 400 에러 차단
         if (!currentMenuId) return;
 
         const fetchBlocks = async () => {
-          if (USE_MOCK_DATA) {
-             if (blocks.length === 0 || currentMenuId === '1') {
-                 setBlocks(JSON.parse(JSON.stringify(MOCK_BLOCKS)));
-                 setOriginalBlocks(JSON.parse(JSON.stringify(MOCK_BLOCKS)));
-             }
-             return;
-          }
-
-          if (!supabase || !supabase.from) return;
-
-          const { data, error } = await supabase
-            .from('blocks')
-            .select('*')
-            .eq('gnb_id', currentMenuId)
-            .order('sort_order', { ascending: true });
-
-          if (data) {
-            const formattedBlocks = data.map(b => ({
-              id: b.id, type: b.type, title: b.title, blockId: b.block_id_code, showTitle: b.show_title, isNew: false, ...b.content
-            }));
-            setBlocks(formattedBlocks);
-            setOriginalBlocks(JSON.parse(JSON.stringify(formattedBlocks)));
-          } else {
-            setBlocks([]);
-            setOriginalBlocks([]);
-          }
-        };
-        fetchBlocks();
-    }, [currentMenuId, supabase]);
-
-    useEffect(() => {
-        const fetchRequests = async () => {
             if (USE_MOCK_DATA) {
-                setRequests(MOCK_REQUESTS);
+                if (blocks.length === 0 || currentMenuId === '1') {
+                    setBlocks(JSON.parse(JSON.stringify(MOCK_BLOCKS)));
+                    setOriginalBlocks(JSON.parse(JSON.stringify(MOCK_BLOCKS)));
+                }
                 return;
             }
 
             if (!supabase || !supabase.from) return;
 
-            const { data } = await supabase
-                .from('requests')
+            const { data, error } = await supabase
+                .from('blocks')
                 .select('*')
-                .order('created_at', { ascending: false });
-            
-            if (data) {
-                const formattedRequests = data.map(r => {
-                    let type = r.snapshot_new ? 'PUBLISH' : 'VERTICAL'; 
-                    // remarks가 '[TYPE]' 형식으로 시작하면 해당 타입을 추출 (description 파싱 대신 단순화)
-                    // 실제 DB에서는 description에 통합 저장되므로, 꺼내올 때 파싱 로직이 필요할 수 있으나
-                    // 여기서는 기존 로직 호환성을 위해 remarks 사용 (DB에 없다면 description에서 파싱해야 함)
-                    // 이번 수정에서는 insert 시 remarks 제외하고 description에 넣는 것이 핵심.
-                    // fetch 시에는 description에서 파싱하는 로직을 추가하거나, 기존 remarks가 있다면 사용.
-                    
-                    // description에서 [요청 타입] 추출 시도
-                    if (!r.remarks && r.description) {
-                         const typeMatch = r.description.match(/\[요청 타입\]\s*([A-Z0-9_]+)/);
-                         if (typeMatch) type = typeMatch[1];
-                         
-                         const remarksMatch = r.description.match(/\[비고\]\s*(.*)/);
-                         if (remarksMatch) r.remarks = remarksMatch[1];
-                         
-                         const jiraMatch = r.description.match(/\[Jira 티켓\]\s*(.*)/);
-                         if (jiraMatch && jiraMatch[1] !== '-') r.jiraLink = jiraMatch[1];
-                    }
+                .eq('gnb_id', currentMenuId)
+                .order('sort_order', { ascending: true });
 
+            if (data) {
+                const formattedBlocks = data.map(b => ({
+                    id: b.id, type: b.type, title: b.title, blockId: b.block_id_code, showTitle: b.show_title, isNew: false, ...b.content
+                }));
+                setBlocks(formattedBlocks);
+                setOriginalBlocks(JSON.parse(JSON.stringify(formattedBlocks)));
+            } else {
+                setBlocks([]);
+                setOriginalBlocks([]);
+            }
+        };
+        fetchBlocks();
+    }, [currentMenuId, supabase]);
+
+    // 3. 요청 내역 가져오기 (생략 - 기존 로직 유지)
+    useEffect(() => {
+        const fetchRequests = async () => {
+            if (USE_MOCK_DATA) { setRequests(MOCK_REQUESTS); return; }
+            if (!supabase || !supabase.from) return;
+            const { data } = await supabase.from('requests').select('*').order('created_at', { ascending: false });
+            if (data) {
+                // (기존 포맷팅 로직 그대로 사용)
+                const formattedRequests = data.map(r => {
+                    let type = r.snapshot_new ? 'PUBLISH' : 'VERTICAL';
+                    if (!r.remarks && r.description) {
+                        const typeMatch = r.description.match(/\[요청 타입\]\s*([A-Z0-9_]+)/);
+                        if (typeMatch) type = typeMatch[1];
+                        const remarksMatch = r.description.match(/\[비고\]\s*(.*)/);
+                        if (remarksMatch) r.remarks = remarksMatch[1];
+                        const jiraMatch = r.description.match(/\[Jira 티켓\]\s*(.*)/);
+                        if (jiraMatch && jiraMatch[1] !== '-') r.jiraLink = jiraMatch[1];
+                    }
                     return {
-                        id: r.id, 
-                        title: r.title, 
-                        requester: r.requester, 
-                        team: r.team, 
-                        gnb: r.gnb_target, 
-                        type: type, 
-                        desc: r.description, 
-                        location: r.location, 
-                        status: r.status, 
-                        date: new Date(r.created_at).toLocaleDateString(),
-                        createdAt: new Date(r.created_at).toLocaleString(),
-                        remarks: r.remarks, 
-                        jiraLink: r.jira_link,
-                        changes: [], 
-                        snapshot: r.snapshot_new, 
-                        originalSnapshot: r.snapshot_original, 
-                        menuPath: r.gnb_target 
+                        id: r.id, title: r.title, requester: r.requester, team: r.team, gnb: r.gnb_target, type: type, desc: r.description, location: r.location, status: r.status, date: new Date(r.created_at).toLocaleDateString(), createdAt: new Date(r.created_at).toLocaleString(), remarks: r.remarks, jiraLink: r.jira_link, changes: r.changes || [], snapshot: r.snapshot_new, originalSnapshot: r.snapshot_original, menuPath: r.gnb_target
                     };
                 });
                 setRequests(formattedRequests);
             }
         };
-        fetchRequests(); 
+        fetchRequests();
     }, [viewMode, supabase]);
 
     const toggleExpand = (id) => {
@@ -354,20 +307,13 @@ const useBtvData = (supabase, viewMode) => {
     };
 
     const handleMenuChange = (id, path, isLeaf = true) => {
-        if (!isLeaf) {
-            toggleExpand(id);
-            return;
-        }
+        if (!isLeaf) { toggleExpand(id); return; }
+        setCurrentMenuId(id);
+        setCurrentMenuPath(path);
+        // Mock 데이터일 때만 랜덤 셔플
         if (USE_MOCK_DATA) {
-            setCurrentMenuId(id);
-            setCurrentMenuPath(path);
             const shuffled = [...MOCK_BLOCKS].sort(() => 0.5 - Math.random());
-            const newBlocks = id === '1' ? [...MOCK_BLOCKS] : shuffled;
-            setBlocks(JSON.parse(JSON.stringify(newBlocks)));
-            setOriginalBlocks(JSON.parse(JSON.stringify(newBlocks)));
-        } else {
-            setCurrentMenuId(id);
-            setCurrentMenuPath(path);
+            setBlocks(JSON.parse(JSON.stringify(id === '1' ? MOCK_BLOCKS : shuffled)));
         }
     };
 
@@ -375,191 +321,155 @@ const useBtvData = (supabase, viewMode) => {
         const slug = generateSlug(name);
         const newGnb = { id: `gnb-${Date.now()}`, name, slug, children: [] };
         setGnbList(prev => [...prev, newGnb]);
-
         if (!USE_MOCK_DATA) {
-            const { error } = await supabase.from('gnb_menus').insert({ name, slug, sort_order: gnbList.length });
-            if(error) fetchGnb(); 
-            else fetchGnb(); 
+            await supabase.from('gnb_menus').insert({ name, slug, sort_order: gnbList.length });
+            fetchGnb();
         }
     };
 
     const addSubMenu = async (parentId, name) => {
         const slug = generateSlug(name);
         setGnbList(prev => prev.map(item => {
-            if (item.id === parentId) {
-                return { ...item, children: [...(item.children || []), { id: `sub-${Date.now()}`, name, slug }] };
-            }
+            if (item.id === parentId) return { ...item, children: [...(item.children || []), { id: `sub-${Date.now()}`, name, slug }] };
             return item;
         }));
         if (!expandedMenuIds.includes(parentId)) setExpandedMenuIds([...expandedMenuIds, parentId]);
-
         if (!USE_MOCK_DATA) {
             const parent = gnbList.find(g => g.id === parentId);
-            const sortOrder = parent ? parent.children.length : 0;
-            const { error } = await supabase.from('gnb_menus').insert({ name, slug, parent_id: parentId, sort_order: sortOrder });
-            if(!error) fetchGnb();
+            await supabase.from('gnb_menus').insert({ name, slug, parent_id: parentId, sort_order: parent ? parent.children.length : 0 });
+            fetchGnb();
         }
     };
 
-  const reorderMenu = async (dragId, dropId, type) => {
-      if (dragId === dropId) return;
-      const strDragId = String(dragId);
-      const strDropId = String(dropId);
-  
-      // 깊은 복사
-      const newList = JSON.parse(JSON.stringify(gnbList));
-  
-      // [헬퍼 함수] 리스트 내 이동 처리 및 인덱스 재할당
-      const moveAndReindex = (items, dId, targetIndex) => {
-          const dragIdx = items.findIndex(i => String(i.id) === dId);
-          if (dragIdx === -1) return null;
-          
-          const [item] = items.splice(dragIdx, 1);
-          items.splice(targetIndex, 0, item);
-          
-          // [핵심] 순서를 0부터 다시 싹 매기기 (DB 꼬임 방지)
-          return items.map((itm, idx) => ({ ...itm, sort_order: idx }));
-      };
-  
-      if (type === 'GNB') {
-        // 1. GNB 이동
-        const dropIndex = newList.findIndex(i => String(i.id) === strDropId);
-        if (dropIndex === -1) return;
-  
-        const updatedList = moveAndReindex(newList, strDragId, dropIndex);
-        if (!updatedList) return;
-  
-        setGnbList(updatedList); // 화면 즉시 반영
-  
-        if (!USE_MOCK_DATA) {
-            // 전체 순서 업데이트
-            const updates = updatedList.map(item => 
-                supabase.from('gnb_menus').update({ sort_order: item.sort_order }).eq('id', item.id)
-            );
-            await Promise.all(updates);
-        }
-  
-      } else {
-        // 2. 서브 메뉴 이동
-        let sourceGnb = null;
-        let targetGnb = null;
-        let targetIndex = 0;
-  
-        // 위치 찾기
-        for (let gnb of newList) {
-            if (gnb.children.some(c => String(c.id) === strDragId)) sourceGnb = gnb;
-            const dropIdx = gnb.children.findIndex(c => String(c.id) === strDropId);
-            if (dropIdx > -1) { targetGnb = gnb; targetIndex = dropIdx; }
-        }
-  
-        // 예외: 헤더 위로 드롭 시
-        if (!targetGnb) {
-            const headerIdx = newList.findIndex(g => String(g.id) === strDropId);
-            if (headerIdx > -1) { targetGnb = newList[headerIdx]; targetIndex = 0; }
-            else return; 
-        }
-        if (!sourceGnb) return;
-  
-        // 이동 실행
-        const dragItemIndex = sourceGnb.children.findIndex(c => String(c.id) === strDragId);
-        const [dragItem] = sourceGnb.children.splice(dragItemIndex, 1);
-        
-        // 같은 그룹 내 아래로 이동 시 인덱스 보정 없이 그대로 삽입 (Swap 효과)
-        targetGnb.children.splice(targetIndex, 0, dragItem);
-  
-        // [핵심] 변경된 그룹의 자식들에게 번호표(sort_order) 새로 발급
-        targetGnb.children.forEach((child, idx) => { child.sort_order = idx; });
-        if (sourceGnb.id !== targetGnb.id) {
-            sourceGnb.children.forEach((child, idx) => { child.sort_order = idx; });
-        }
-  
-        setGnbList(newList); // 화면 즉시 반영
-  
-        if (!USE_MOCK_DATA) {
-            try {
-                const promises = [];
-                // 타겟 그룹 전체 업데이트 (부모 ID 변경 포함)
-                targetGnb.children.forEach(child => {
-                    promises.push(
-                        supabase.from('gnb_menus')
-                            .update({ sort_order: child.sort_order, parent_id: targetGnb.id })
-                            .eq('id', child.id)
-                    );
-                });
-                // 소스 그룹 전체 업데이트 (다른 그룹이었을 경우)
-                if (sourceGnb.id !== targetGnb.id) {
-                    sourceGnb.children.forEach(child => {
-                        promises.push(
-                            supabase.from('gnb_menus')
-                                .update({ sort_order: child.sort_order })
-                                .eq('id', child.id)
-                        );
-                    });
+    // [핵심 기능] 메뉴 순서 변경 (디버깅 강화 및 400 에러 방지)
+    const reorderMenu = async (dragId, dropId, type) => {
+        if (dragId === dropId) return;
+        const strDragId = String(dragId);
+        const strDropId = String(dropId);
+
+        console.log(`[Reorder] ${type} 이동 시도: ${strDragId} -> ${strDropId}`);
+
+        // 깊은 복사
+        const newList = JSON.parse(JSON.stringify(gnbList));
+
+        // 헬퍼: 배열 재정렬 함수
+        const reorderArray = (list, fromId, toId) => {
+            const fromIdx = list.findIndex(i => String(i.id) === fromId);
+            const toIdx = list.findIndex(i => String(i.id) === toId);
+            if (fromIdx === -1 || toIdx === -1) return null;
+            const [item] = list.splice(fromIdx, 1);
+            list.splice(toIdx, 0, item);
+            return list;
+        };
+
+        if (type === 'GNB') {
+            // [GNB 이동]
+            if (reorderArray(newList, strDragId, strDropId)) {
+                setGnbList(newList);
+                if (!USE_MOCK_DATA) {
+                    const updates = newList.map((item, idx) => supabase.from('gnb_menus').update({ sort_order: idx }).eq('id', item.id));
+                    await Promise.all(updates);
                 }
-                await Promise.all(promises);
-                console.log("✅ 순서 저장 완료");
-            } catch (e) {
-                console.error("❌ 저장 실패", e);
-                alert("순서 저장 중 오류가 발생했습니다.");
+            }
+        } else {
+            // [SUBMENU 이동]
+            let sourceParent = null, targetParent = null;
+            
+            // 부모 찾기
+            for (const gnb of newList) {
+                if (gnb.children.some(c => String(c.id) === strDragId)) sourceParent = gnb;
+                if (gnb.children.some(c => String(c.id) === strDropId)) targetParent = gnb;
+            }
+
+            // 헤더로 드롭한 경우 예외 처리
+            if (!targetParent) {
+                const headerIndex = newList.findIndex(g => String(g.id) === strDropId);
+                if (headerIndex > -1 && sourceParent) {
+                    targetParent = newList[headerIndex];
+                    // 드래그한 아이템 찾기
+                    const dragItemIdx = sourceParent.children.findIndex(c => String(c.id) === strDragId);
+                    const [dragItem] = sourceParent.children.splice(dragItemIdx, 1);
+                    targetParent.children.unshift(dragItem); // 맨 앞에 추가
+                } else {
+                    console.warn(`[Reorder Fail] 이동할 대상을 찾지 못했습니다. Drag: ${strDragId}, Drop: ${strDropId}`);
+                    return;
+                }
+            } else {
+                // 일반 이동 (같은 그룹 or 다른 그룹)
+                if (!sourceParent) return;
+                
+                const dragItemIdx = sourceParent.children.findIndex(c => String(c.id) === strDragId);
+                const [dragItem] = sourceParent.children.splice(dragItemIdx, 1);
+                
+                const dropItemIdx = targetParent.children.findIndex(c => String(c.id) === strDropId);
+                // 같은 그룹 내 아래로 이동 시 인덱스 보정 없이 그대로 삽입
+                targetParent.children.splice(dropItemIdx, 0, dragItem);
+            }
+
+            // UI 반영
+            setGnbList(newList);
+
+            // DB 저장
+            if (!USE_MOCK_DATA) {
+                try {
+                    const promises = [];
+                    // 타겟 그룹 전체 재정렬 및 저장 (부모 ID 변경 포함)
+                    targetParent.children.forEach((child, idx) => {
+                        if (child.id) {
+                            promises.push(supabase.from('gnb_menus').update({ sort_order: idx, parent_id: targetParent.id }).eq('id', child.id));
+                        }
+                    });
+                    // 소스 그룹 전체 재정렬 (다른 그룹이었을 경우)
+                    if (sourceParent.id !== targetParent.id) {
+                        sourceParent.children.forEach((child, idx) => {
+                            if (child.id) {
+                                promises.push(supabase.from('gnb_menus').update({ sort_order: idx }).eq('id', child.id));
+                            }
+                        });
+                    }
+                    await Promise.all(promises);
+                    console.log('[DB] 순서 저장 완료');
+                } catch (e) {
+                    console.error('[DB Error]', e);
+                }
             }
         }
-      }
-    };
-  
-    const moveBlock = (index, direction) => {
-        // 읽기 전용이거나 히스토리 모드일 때는 작동하지 않음
-        if (viewMode === 'HISTORY') return; // readOnly 변수가 없다면 viewMode로만 체크해도 됩니다.
-        
-        const newBlocks = [...blocks];
-        
-        if (direction === 'UP') {
-            if (index === 0) return; // 맨 위면 무시
-            // 위 블록과 현재 블록의 위치 교환
-            [newBlocks[index - 1], newBlocks[index]] = [newBlocks[index], newBlocks[index - 1]];
-        } else if (direction === 'DOWN') {
-            if (index === newBlocks.length - 1) return; // 맨 아래면 무시
-            // 아래 블록과 현재 블록의 위치 교환
-            [newBlocks[index], newBlocks[index + 1]] = [newBlocks[index + 1], newBlocks[index]];
-        }
-        setBlocks(newBlocks);
     };
 
+    // ... (delete 등 나머지 함수는 기존과 동일하게 유지하거나 필요시 복사)
     const deleteGnb = async (id) => {
-          setGnbList(prev => prev.filter(item => item.id !== id));
-          if (currentMenuId === id) { setCurrentMenuId(null); setCurrentMenuPath(''); }
-
-          if (!USE_MOCK_DATA) {
-             await supabase.from('gnb_menus').delete().eq('id', id);
-             fetchGnb();
-          }
+        setGnbList(prev => prev.filter(item => item.id !== id));
+        if (currentMenuId === id) { setCurrentMenuId(null); setCurrentMenuPath(''); }
+        if (!USE_MOCK_DATA) { await supabase.from('gnb_menus').delete().eq('id', id); fetchGnb(); }
     };
 
     const deleteSubMenu = async (parentId, childId) => {
-          setGnbList(prev => prev.map(item => {
-              if (item.id === parentId) {
-                  return { ...item, children: item.children.filter(c => c.id !== childId) };
-              }
-              return item;
-          }));
-          if (currentMenuId === childId) { setCurrentMenuId(parentId); }
+        setGnbList(prev => prev.map(item => {
+            if (item.id === parentId) return { ...item, children: item.children.filter(c => c.id !== childId) };
+            return item;
+        }));
+        if (currentMenuId === childId) { setCurrentMenuId(parentId); }
+        if (!USE_MOCK_DATA) { await supabase.from('gnb_menus').delete().eq('id', childId); fetchGnb(); }
+    };
 
-          if (!USE_MOCK_DATA) {
-              await supabase.from('gnb_menus').delete().eq('id', childId);
-              fetchGnb();
-          }
+    // [moveBlock 등 나머지 함수들...]
+    const moveBlock = (index, direction) => {
+       if (viewMode === 'HISTORY') return;
+       const newBlocks = [...blocks];
+       if (direction === 'UP') {
+           if (index === 0) return;
+           [newBlocks[index - 1], newBlocks[index]] = [newBlocks[index], newBlocks[index - 1]];
+       } else if (direction === 'DOWN') {
+           if (index === newBlocks.length - 1) return;
+           [newBlocks[index], newBlocks[index + 1]] = [newBlocks[index + 1], newBlocks[index]];
+       }
+       setBlocks(newBlocks);
     };
 
     return {
-        gnbList, setGnbList, 
-        currentMenuPath, setCurrentMenuPath, 
-        currentMenuId, setCurrentMenuId,
-        expandedMenuIds, setExpandedMenuIds,
-        blocks, setBlocks, 
-        originalBlocks, setOriginalBlocks,
-        requests, setRequests,
-        isLoading, setIsLoading,
-        handleMenuChange, toggleExpand, 
-        addGnb, addSubMenu, deleteGnb, deleteSubMenu, reorderMenu, moveBlock
+        gnbList, setGnbList, currentMenuPath, setCurrentMenuPath, currentMenuId, setCurrentMenuId, expandedMenuIds, setExpandedMenuIds,
+        blocks, setBlocks, originalBlocks, setOriginalBlocks, requests, setRequests, isLoading, setIsLoading,
+        handleMenuChange, toggleExpand, addGnb, addSubMenu, deleteGnb, deleteSubMenu, reorderMenu, moveBlock
     };
 };
 
