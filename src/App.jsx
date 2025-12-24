@@ -1033,47 +1033,66 @@ export default function App() {
       const original = orgMap.get(block.id);
       
       if (!original) {
-          // 신규 블록
+          // [신규 블록]
           changes.push({ type: '신규', block, desc: `[${block.type}] '${block.title}' 블록 신규 추가` });
+          
+          // 신규 블록 안에 포함된 배너 정보도 요약에 추가 (중요)
+          const banners = block.banners || block.items || [];
+          banners.forEach(bn => {
+             if(bn.type !== 'CONTENT') { // 콘텐츠가 아닌 배너인 경우만
+                 const jiraInfo = bn.jiraLink ? ` (Jira: ${bn.jiraLink})` : '';
+                 changes.push({ type: '상세', block, desc: `ㄴ [배너포함] '${bn.title}'${jiraInfo}` });
+             }
+          });
+
       } else {
-        // 수정된 블록 (상세 비교)
+        // [수정된 블록] 상세 비교
         const diffs = [];
         
-        // (1) 타이틀 변경
+        // (1) 타이틀/옵션 변경
         if (block.title !== original.title) diffs.push(`타이틀 변경`);
+        if (block.showTitle !== original.showTitle) diffs.push(`블록명 ${block.showTitle ? '노출' : '숨김'} 처리`);
+        if (block.contentId !== original.contentId) diffs.push(`ID 변경(${original.contentId || '없음'} → ${block.contentId})`);
         
-        // (2) [NEW] 블록명 노출 여부 변경
-        if (block.showTitle !== original.showTitle) {
-            diffs.push(`블록명 ${block.showTitle ? '노출' : '숨김'} 처리`);
-        }
-
-        // (3) [NEW] ID (Library/Race) 변경
-        if (block.contentId !== original.contentId) {
-            diffs.push(`ID 변경(${original.contentId || '없음'} → ${block.contentId})`);
-        }
-        
-        // (4) 배너/아이템 변경 감지
+        // (2) 배너/아이템 변경 감지 (고도화됨)
         const newBanners = block.banners || block.items || [];
         const oldBanners = original.banners || original.items || [];
         
-        if (newBanners.length !== oldBanners.length) {
-            diffs.push(`배너 수 변경(${oldBanners.length}→${newBanners.length})`);
-        } else {
-            // 배너 내부 속성(기간 등) 비교
-            newBanners.forEach((nb, idx) => {
-                const ob = oldBanners[idx];
-                if (ob) {
-                    if (nb.startDate !== ob.startDate || nb.endDate !== ob.endDate) {
-                        diffs.push(`배너#${idx+1} 기간 변경`);
-                    }
-                    if (nb.img !== ob.img) {
-                        diffs.push(`배너#${idx+1} 이미지 교체`);
-                    }
-                }
-            });
-        }
+        // 배너 추가 감지 (ID 기준)
+        newBanners.forEach(nb => {
+            const isNew = !oldBanners.find(ob => ob.id === nb.id);
+            if (isNew) {
+                const jiraInfo = nb.jiraLink ? ` (Jira: ${nb.jiraLink})` : '';
+                // 여기서 배너명과 Jira 링크를 명시해줍니다!
+                changes.push({ type: '추가', block, desc: `[${block.title}] 배너 추가: '${nb.title}'${jiraInfo}` });
+            }
+        });
 
-        // 변경사항이 하나라도 있으면 changes에 추가
+        // 배너 삭제 감지
+        oldBanners.forEach(ob => {
+            const isDeleted = !newBanners.find(nb => nb.id === ob.id);
+            if (isDeleted) {
+                changes.push({ type: '삭제', block, desc: `[${block.title}] 배너 삭제: '${ob.title}'` });
+            }
+        });
+
+        // 배너 내용 수정 감지 (기존 배너 중 내용이 바뀐 것)
+        newBanners.forEach(nb => {
+            const originalBanner = oldBanners.find(ob => ob.id === nb.id);
+            if (originalBanner) {
+                const bannerDiffs = [];
+                if (nb.title !== originalBanner.title) bannerDiffs.push('명칭');
+                if (nb.img !== originalBanner.img) bannerDiffs.push('이미지');
+                if (nb.jiraLink !== originalBanner.jiraLink) bannerDiffs.push('Jira');
+                if (nb.startDate !== originalBanner.startDate || nb.endDate !== originalBanner.endDate) bannerDiffs.push('기간');
+
+                if (bannerDiffs.length > 0) {
+                    changes.push({ type: '수정', block, desc: `[${block.title}] '${nb.title}' 수정 (${bannerDiffs.join(', ')})` });
+                }
+            }
+        });
+
+        // 블록 자체 속성 변경 내역 추가
         if (diffs.length > 0) {
             changes.push({ type: '수정', block, desc: `[${block.title}] ${diffs.join(', ')}` });
         }
