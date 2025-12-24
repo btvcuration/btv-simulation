@@ -2372,48 +2372,66 @@ export default function App() {
                  <div className="grid grid-cols-7 gap-1 text-center mb-2">
                    {['일','월','화','수','목','금','토'].map(d => <span key={d} className="text-[10px] text-slate-500">{d}</span>)}
                  </div>
-  
+
                  {/* 날짜 그리드 */}
                  <div className="grid grid-cols-7 gap-1">
                    {(() => {
-                      const daysInMonth = getDaysInMonth(currentCalendarDate);
-                      const firstDay = getFirstDayOfMonth(currentCalendarDate);
-                      const days = [];
-                      // 빈 칸 채우기
-                      for (let i = 0; i < firstDay; i++) days.push(<div key={`empty-${i}`} className="h-8"></div>);
-                      
-                      // 날짜 채우기
-                      for (let d = 1; d <= daysInMonth; d++) {
-                        const year = currentCalendarDate.getFullYear();
-                        const month = currentCalendarDate.getMonth() + 1;
-                        const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                        
-                        // 해당 날짜에 데이터가 있는지 확인 (Mock 모드 등 고려)
-                        const hasHistory = requests.some(r => r.status === 'APPROVED' && (r.date === dateStr || r.created_at?.startsWith(dateStr)));
-                        
-                        days.push(
-                          <button 
-                            key={d} 
-                            onClick={() => { 
-                              // [핵심 로직] 날짜 클릭 시 -> 팝업 닫고 -> 메인 모달 열기
-                              setHistorySelectedDate(dateStr); 
-                              setIsCalendarPopupOpen(false); 
-                              setIsHistoryModalOpen(true);
-                              setHistoryDetailReq(null);
-                            }}
-                            className={`h-8 rounded text-xs flex items-center justify-center hover:bg-[#2e3038] transition-colors ${hasHistory ? 'bg-[#7387ff]/20 text-[#7387ff] font-bold border border-[#7387ff]/50' : 'text-slate-400'}`}
-                          >
-                            {d}
-                          </button>
-                        );
-                      }
-                      return days;
+                     const daysInMonth = getDaysInMonth(currentCalendarDate);
+                     const firstDay = getFirstDayOfMonth(currentCalendarDate);
+                     
+                     // [추가됨] 오늘 날짜 비교를 위한 변수 정의
+                     const now = new Date();
+                     const realTodayYear = now.getFullYear();
+                     const realTodayMonth = now.getMonth();
+                     const realTodayDate = now.getDate();
+
+                     const days = [];
+                     // 빈 칸 채우기
+                     for (let i = 0; i < firstDay; i++) days.push(<div key={`empty-${i}`} className="h-8"></div>);
+                     
+                     // 날짜 채우기
+                     for (let d = 1; d <= daysInMonth; d++) {
+                       const year = currentCalendarDate.getFullYear();
+                       const month = currentCalendarDate.getMonth() + 1;
+                       const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                       
+                       // 해당 날짜에 데이터가 있는지 확인
+                       const hasHistory = requests.some(r => r.status === 'APPROVED' && (r.date === dateStr || r.created_at?.startsWith(dateStr)));
+                       
+                       // [추가됨] 오늘 날짜인지 판별
+                       const isToday = (currentCalendarDate.getFullYear() === realTodayYear) && 
+                                       (currentCalendarDate.getMonth() === realTodayMonth) && 
+                                       (d === realTodayDate);
+
+                       days.push(
+                         <button 
+                           key={d} 
+                           onClick={() => { 
+                             setHistorySelectedDate(dateStr); 
+                             setIsCalendarPopupOpen(false); 
+                             setIsHistoryModalOpen(true);
+                             setHistoryDetailReq(null);
+                           }}
+                           className={`h-8 rounded text-xs flex items-center justify-center transition-all
+                             ${isToday 
+                               ? 'bg-[#7387ff] text-white font-bold shadow-[0_0_10px_rgba(115,135,255,0.4)] ring-1 ring-[#7387ff]' // [오늘] 파란 배경 강조
+                               : hasHistory 
+                                 ? 'bg-[#7387ff]/20 text-[#7387ff] font-bold border border-[#7387ff]/50 hover:bg-[#2e3038]' // [이력있음] 연한 파랑 + 테두리
+                                 : 'text-slate-400 hover:bg-[#2e3038] hover:text-white' // [일반]
+                             }
+                           `}
+                         >
+                           {d}
+                         </button>
+                       );
+                     }
+                     return days;
                    })()}
                  </div>
               </div>
-  
+
               <button 
-                onClick={() => setIsCalendarPopupOpen(false)} // 취소 시 팝업만 닫힘
+                onClick={() => setIsCalendarPopupOpen(false)} 
                 className="text-xs text-slate-500 hover:text-white underline decoration-slate-600 underline-offset-4"
               >
                 취소하고 돌아가기
