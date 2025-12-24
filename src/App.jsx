@@ -341,101 +341,118 @@ const useBtvData = (supabase, viewMode) => {
         }
     };
 
-    // [핵심 기능] 메뉴 순서 변경 (디버깅 강화 및 400 에러 방지)
+    // [수정된 reorderMenu] 원인 파악 로그 및 안전장치 추가
     const reorderMenu = async (dragId, dropId, type) => {
         if (dragId === dropId) return;
         const strDragId = String(dragId);
         const strDropId = String(dropId);
 
-        console.log(`[Reorder] ${type} 이동 시도: ${strDragId} -> ${strDropId}`);
+        console.log(`📍 [Reorder Start] Type: ${type}, Drag: ${strDragId}, Drop: ${strDropId}`);
 
-        // 깊은 복사
         const newList = JSON.parse(JSON.stringify(gnbList));
 
-        // 헬퍼: 배열 재정렬 함수
-        const reorderArray = (list, fromId, toId) => {
-            const fromIdx = list.findIndex(i => String(i.id) === fromId);
-            const toIdx = list.findIndex(i => String(i.id) === toId);
-            if (fromIdx === -1 || toIdx === -1) return null;
-            const [item] = list.splice(fromIdx, 1);
-            list.splice(toIdx, 0, item);
-            return list;
-        };
-
+        // 1. GNB 간 이동
         if (type === 'GNB') {
-            // [GNB 이동]
-            if (reorderArray(newList, strDragId, strDropId)) {
+            const dragIndex = newList.findIndex(i => String(i.id) === strDragId);
+            const dropIndex = newList.findIndex(i => String(i.id) === strDropId);
+
+            if (dragIndex > -1 && dropIndex > -1) {
+                const [dragItem] = newList.splice(dragIndex, 1);
+                newList.splice(dropIndex, 0, dragItem);
                 setGnbList(newList);
+
                 if (!USE_MOCK_DATA) {
                     const updates = newList.map((item, idx) => supabase.from('gnb_menus').update({ sort_order: idx }).eq('id', item.id));
                     await Promise.all(updates);
                 }
+            } else {
+                console.warn("⚠️ GNB 이동 실패: 항목을 찾을 수 없습니다.");
             }
-        } else {
-            // [SUBMENU 이동]
-            let sourceParent = null, targetParent = null;
-            
-            // 부모 찾기
+        } 
+        // 2. 하위 메뉴(Submenu) 이동
+        else {
+            let sourceParent = null;
+            let targetParent = null;
+
+            // (1) 부모 찾기 (출발지와 목적지가 누구 자식인지 확인)
             for (const gnb of newList) {
                 if (gnb.children.some(c => String(c.id) === strDragId)) sourceParent = gnb;
                 if (gnb.children.some(c => String(c.id) === strDropId)) targetParent = gnb;
             }
 
-            // 헤더로 드롭한 경우 예외 처리
-            if (!targetParent) {
-                const headerIndex = newList.findIndex(g => String(g.id) === strDropId);
-                if (headerIndex > -1 && sourceParent) {
-                    targetParent = newList[headerIndex];
-                    // 드래그한 아이템 찾기
-                    const dragItemIdx = sourceParent.children.findIndex(c => String(c.id) === strDragId);
-                    const [dragItem] = sourceParent.children.splice(dragItemIdx, 1);
-                    targetParent.children.unshift(dragItem); // 맨 앞에 추가
+            // (2) [예외 처리] 출발지 부모를 못 찾았을 때 (가장 유력한 원인)
+            if (!sourceParent) {
+                // 혹시 GNB(상위메뉴)를 하위메뉴로 드래그했는지 확인
+                const isGnb = newList.some(g => String(g.id) === strDragId);
+                if (isGnb) {
+                    alert("🚫 상위 메뉴(GNB)를 하위 메뉴 안으로 넣을 수 없습니다.");
                 } else {
-                    console.warn(`[Reorder Fail] 이동할 대상을 찾지 못했습니다. Drag: ${strDragId}, Drop: ${strDropId}`);
-                    return;
+                    console.error(`❌ 오류: 이동하려는 항목(${strDragId})의 부모 그룹을 찾을 수 없습니다.`);
+                    alert("데이터 오류: 이동하려는 메뉴의 위치를 확인할 수 없습니다. (새로고침 후 다시 시도해주세요)");
                 }
-            } else {
-                // 일반 이동 (같은 그룹 or 다른 그룹)
-                if (!sourceParent) return;
-                
-                const dragItemIdx = sourceParent.children.findIndex(c => String(c.id) === strDragId);
-                const [dragItem] = sourceParent.children.splice(dragItemIdx, 1);
-                
-                const dropItemIdx = targetParent.children.findIndex(c => String(c.id) === strDropId);
-                // 같은 그룹 내 아래로 이동 시 인덱스 보정 없이 그대로 삽입
-                targetParent.children.splice(dropItemIdx, 0, dragItem);
+                return;
             }
 
-            // UI 반영
-            setGnbList(newList);
+            // (3) [예외 처리] 헤더(GNB 제목) 위로 드롭했을 때
+            if (!targetParent) {
+                const headerIndex = newList.findIndex(g => String(g.id) === strDropId);
+                if (headerIndex > -1) {
+                    console.log("📍 GNB 헤더로 이동 (그룹 맨 앞으로)");
+                    targetParent = newList[headerIndex];
+                    // 타겟 인덱스는 맨 앞(0)으로 설정되므로 별도 처리 불필요, 아래 로직에서 unshift됨
+                    const dragItemIdx = sourceParent.children.findIndex(c => String(c.id) === strDragId);
+                    const [dragItem] = sourceParent.children.splice(dragItemIdx, 1);
+                    targetParent.children.unshift(dragItem);
+                    
+                    // DB 저장 및 종료
+                    setGnbList(newList);
+                    saveOrderToDB(targetParent, sourceParent);
+                    return;
+                } else {
+                    console.error(`❌ 오류: 도착지(${strDropId})를 찾을 수 없습니다.`);
+                    return;
+                }
+            }
 
-            // DB 저장
-            if (!USE_MOCK_DATA) {
-                try {
-                    const promises = [];
-                    // 타겟 그룹 전체 재정렬 및 저장 (부모 ID 변경 포함)
-                    targetParent.children.forEach((child, idx) => {
-                        if (child.id) {
-                            promises.push(supabase.from('gnb_menus').update({ sort_order: idx, parent_id: targetParent.id }).eq('id', child.id));
-                        }
-                    });
-                    // 소스 그룹 전체 재정렬 (다른 그룹이었을 경우)
-                    if (sourceParent.id !== targetParent.id) {
-                        sourceParent.children.forEach((child, idx) => {
-                            if (child.id) {
-                                promises.push(supabase.from('gnb_menus').update({ sort_order: idx }).eq('id', child.id));
-                            }
-                        });
-                    }
-                    await Promise.all(promises);
-                    console.log('[DB] 순서 저장 완료');
-                } catch (e) {
-                    console.error('[DB Error]', e);
+            // (4) 정상 이동 실행
+            if (sourceParent && targetParent) {
+                const dragItemIdx = sourceParent.children.findIndex(c => String(c.id) === strDragId);
+                const dropItemIdx = targetParent.children.findIndex(c => String(c.id) === strDropId);
+
+                if (dragItemIdx > -1) {
+                    const [dragItem] = sourceParent.children.splice(dragItemIdx, 1);
+                    // 같은 그룹 내 아래로 이동이면 인덱스 그대로, 아니면(위로/다른그룹) 그대로.
+                    // splice는 "그 자리"에 끼워넣으므로 직관적임.
+                    targetParent.children.splice(dropItemIdx, 0, dragItem);
+
+                    setGnbList(newList);
+                    saveOrderToDB(targetParent, sourceParent);
                 }
             }
         }
     };
 
+    // [헬퍼] DB 저장 함수 분리 (중복 제거)
+    const saveOrderToDB = async (targetParent, sourceParent) => {
+        if (USE_MOCK_DATA) return;
+        try {
+            const promises = [];
+            // 타겟 그룹 정렬 저장
+            targetParent.children.forEach((child, idx) => {
+                promises.push(supabase.from('gnb_menus').update({ sort_order: idx, parent_id: targetParent.id }).eq('id', child.id));
+            });
+            // 소스 그룹 정렬 저장 (다른 그룹 이동 시)
+            if (sourceParent && sourceParent.id !== targetParent.id) {
+                sourceParent.children.forEach((child, idx) => {
+                    promises.push(supabase.from('gnb_menus').update({ sort_order: idx }).eq('id', child.id));
+                });
+            }
+            await Promise.all(promises);
+            console.log("✅ DB 순서 저장 완료");
+        } catch (e) {
+            console.error("❌ DB 저장 실패", e);
+        }
+    };
     // ... (delete 등 나머지 함수는 기존과 동일하게 유지하거나 필요시 복사)
     const deleteGnb = async (id) => {
         setGnbList(prev => prev.filter(item => item.id !== id));
