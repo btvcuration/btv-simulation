@@ -1349,17 +1349,16 @@ export default function App() {
     
     // 1. 빈 칸
     for (let i = 0; i < firstDay; i++) {
-        days.push(<div key={`empty-${i}`} className="h-10 w-full pointer-events-none"></div>);
+        days.push(<div key={`empty-${i}`} className="min-h-[3rem] w-full pointer-events-none"></div>);
     }
     
     // 2. 날짜 채우기
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       
-      // [수정됨] 이력이 있는 날인지 확인
-      // 테스트를 위해 'APPROVED' 뿐만 아니라 'PENDING' 상태도 점이 찍히도록 변경했습니다.
+      // 이력이 있는 날인지 확인 (승인됨 + 대기중 모두 포함)
       const hasHistory = requests.some(r => {
-          // r.dateYMD가 없으면 r.date(YYYY-MM-DD)나 created_at을 사용하여 비교
+          // r.dateYMD가 있으면 쓰고, 없으면 기존 date나 created_at 사용
           const rDate = r.dateYMD || r.date || (r.created_at ? r.created_at.split('T')[0] : '');
           return (r.status === 'APPROVED' || r.status === 'PENDING') && rDate === dateStr;
       });
@@ -1376,27 +1375,29 @@ export default function App() {
              setIsHistoryModalOpen(true);
              setHistoryDetailReq(null);
           }} 
+          // [수정 포인트] h-10(고정) -> min-h-[3rem] (유동) / flex-col로 쌓기
           className={`
-            h-10 w-full rounded-lg flex flex-col items-center justify-center relative transition-all group border
+            w-full min-h-[3rem] p-1 rounded-lg flex flex-col items-center justify-start gap-0.5 transition-all border
             ${isToday 
-                ? 'border-[#7387ff] bg-[#7387ff]/20 text-white font-bold' 
+                ? 'border-[#7387ff] bg-[#7387ff]/20 text-white shadow-[inset_0_0_10px_rgba(115,135,255,0.2)]' 
                 : 'border-transparent hover:bg-[#2e3038] hover:border-slate-600'}
-            ${!isToday && hasHistory ? 'bg-[#2e3038] text-slate-100 font-semibold' : ''}
+            ${!isToday && hasHistory ? 'bg-[#2e3038] text-slate-200' : ''}
             ${!isToday && !hasHistory ? 'text-slate-400' : ''}
           `}
         >
-          <span className="text-sm z-10 relative">{d}</span>
+          {/* 1. 날짜 숫자 */}
+          <span className={`text-xs leading-none ${isToday ? 'font-bold' : ''}`}>{d}</span>
           
-          {/* [수정됨] TODAY 뱃지: 안쪽으로 이동하여 잘림 방지 */}
+          {/* 2. TODAY 뱃지 (이제 겹치지 않고 숫자 아래에 위치합니다) */}
           {isToday && (
-            <span className="absolute top-0.5 right-0.5 text-[8px] bg-[#7387ff] text-white px-1 rounded shadow-sm font-bold z-20">
+            <span className="text-[8px] bg-[#7387ff] text-white px-1 py-0.5 rounded leading-none font-bold mt-0.5">
               TODAY
             </span>
           )}
 
-          {/* 이력 점 (Dot) */}
+          {/* 3. 이력 점 (Dot) */}
           {hasHistory && (
-             <div className={`w-1.5 h-1.5 rounded-full mt-1 z-10 ${isToday ? 'bg-white' : 'bg-[#7387ff] shadow-[0_0_5px_#7387ff]'}`}></div>
+             <div className={`w-1.5 h-1.5 rounded-full mt-1 ${isToday ? 'bg-white' : 'bg-[#7387ff]'}`}></div>
           )}
         </button>
       );
