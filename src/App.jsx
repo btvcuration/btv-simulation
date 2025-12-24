@@ -220,6 +220,7 @@ const useBtvData = (supabase, viewMode) => {
 
     useEffect(() => {
         if (!currentMenuId) return;
+        if (!USE_MOCK_DATA && currentMenuId === '1') return;
 
         const fetchBlocks = async () => {
           if (USE_MOCK_DATA) {
@@ -1335,15 +1336,58 @@ export default function App() {
     const month = currentCalendarDate.getMonth();
     const daysInMonth = getDaysInMonth(currentCalendarDate);
     const firstDay = getFirstDayOfMonth(currentCalendarDate);
+    
+    // [추가] 오늘 날짜 스트링 구하기 (YYYY-MM-DD)
+    const todayObj = new Date();
+    const todayStr = `${todayObj.getFullYear()}-${String(todayObj.getMonth() + 1).padStart(2, '0')}-${String(todayObj.getDate()).padStart(2, '0')}`;
+
     const days = [];
-    for (let i = 0; i < firstDay; i++) days.push(<div key={`empty-${i}`} className="h-10"></div>);
+    
+    // 빈 칸 채우기
+    for (let i = 0; i < firstDay; i++) days.push(<div key={`empty-${i}`} className="h-9"></div>);
+    
+    // 날짜 채우기
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      const hasHistory = USE_MOCK_DATA ? MOCK_HISTORY_DATA.hasOwnProperty(dateStr) : false;
+      
+      // [로직] 이력이 있는 날인지 확인 (승인된 요청 기준)
+      const hasHistory = requests.some(r => {
+          if(r.status !== 'APPROVED') return false;
+          // DB의 created_at (YYYY-MM-DDTHH:mm:ss...)에서 날짜만 잘라서 비교
+          const rDate = r.created_at ? r.created_at.split('T')[0] : r.date; 
+          return rDate === dateStr;
+      });
+
+      // [로직] 오늘인지 확인
+      const isToday = dateStr === todayStr;
+
       days.push(
-        <button key={d} onClick={() => handleHistorySelect(dateStr)} className="h-10 rounded hover:bg-[#7387ff]/20 flex flex-col items-center justify-center relative group">
-          <span className={`text-sm ${hasHistory ? 'text-white font-bold' : 'text-slate-400 group-hover:text-white'}`}>{d}</span>
-          {hasHistory && <div className="w-1 h-1 bg-[#7387ff] rounded-full mt-1"></div>}
+        <button 
+          key={d} 
+          onClick={() => {
+             // 1. 팝업 닫기 -> 2. 날짜 설정 -> 3. 메인 모달 열기
+             setHistorySelectedDate(dateStr); 
+             setIsCalendarPopupOpen(false); 
+             setIsHistoryModalOpen(true);
+             setHistoryDetailReq(null);
+          }} 
+          className={`
+            h-9 rounded-lg flex flex-col items-center justify-center relative transition-all group
+            ${isToday ? 'border border-[#7387ff] bg-[#7387ff]/10 text-white font-bold' : 'border border-transparent'} 
+            ${!isToday && hasHistory ? 'text-white font-bold bg-[#2e3038]' : ''}
+            ${!isToday && !hasHistory ? 'text-slate-400 hover:bg-[#2e3038] hover:text-slate-200' : ''}
+          `}
+          title={hasHistory ? '변경 이력 있음' : ''}
+        >
+          <span className="text-xs z-10 relative">{d}</span>
+          
+          {/* 오늘 날짜 표시 (상단 작은 텍스트) - 선택 사항 */}
+          {isToday && <span className="absolute -top-1.5 right-0 text-[8px] text-[#7387ff] bg-[#191b23] px-1 rounded-full font-bold">TODAY</span>}
+
+          {/* 이력이 있는 날 표시 (하단 점) */}
+          {hasHistory && (
+             <div className={`w-1 h-1 rounded-full mt-0.5 ${isToday ? 'bg-white' : 'bg-[#7387ff]'}`}></div>
+          )}
         </button>
       );
     }
@@ -2066,11 +2110,21 @@ export default function App() {
                             <div className="grid grid-cols-2 gap-2">
                                 <div>
                                     <label className="block text-[10px] text-slate-500 mb-1">게시 시작일</label>
-                                    <input type="date" className="w-full bg-[#191b23] border border-[#2e3038] rounded px-2 py-1 text-xs text-white" value={newRequestData.startDate} onChange={e => setNewRequestData({...newRequestData, startDate: e.target.value})} />
+                                    <input 
+                                        type="date" 
+                                        className="w-full bg-[#191b23] border border-[#2e3038] rounded px-2 py-1 text-xs text-white [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert" 
+                                        value={newRequestData.startDate} 
+                                        onChange={e => setNewRequestData({...newRequestData, startDate: e.target.value})} 
+                                    />
                                 </div>
                                 <div>
                                     <label className="block text-[10px] text-slate-500 mb-1">게시 종료일</label>
-                                    <input type="date" className="w-full bg-[#191b23] border border-[#2e3038] rounded px-2 py-1 text-xs text-white" value={newRequestData.endDate} onChange={e => setNewRequestData({...newRequestData, endDate: e.target.value})} />
+                                    <input 
+                                        type="date" 
+                                        className="w-full bg-[#191b23] border border-[#2e3038] rounded px-2 py-1 text-xs text-white [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert" 
+                                        value={newRequestData.endDate} 
+                                        onChange={e => setNewRequestData({...newRequestData, endDate: e.target.value})} 
+                                    />
                                 </div>
                             </div>
                         </div>
@@ -2167,11 +2221,21 @@ export default function App() {
                     <div className="grid grid-cols-2 gap-2 border-t border-[#2e3038] pt-3">
                         <div>
                             <label className="block text-xs font-bold text-slate-500 mb-1">시작일</label>
-                            <input type="date" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white" value={editBannerData.startDate} onChange={e => setEditBannerData({...editBannerData, startDate: e.target.value})} />
+                            <input 
+                                type="date" 
+                                className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert" 
+                                value={editBannerData.startDate} 
+                                onChange={e => setEditBannerData({...editBannerData, startDate: e.target.value})} 
+                            />
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-slate-500 mb-1">종료일</label>
-                            <input type="date" className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white" value={editBannerData.endDate} onChange={e => setEditBannerData({...editBannerData, endDate: e.target.value})} />
+                            <input 
+                                type="date" 
+                                className="w-full bg-[#100d1d] border border-[#2e3038] rounded px-3 py-2 text-sm text-white [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert" 
+                                value={editBannerData.endDate} 
+                                onChange={e => setEditBannerData({...editBannerData, endDate: e.target.value})} 
+                            />
                         </div>
                     </div>
 
