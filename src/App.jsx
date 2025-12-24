@@ -1336,35 +1336,53 @@ export default function App() {
   };
 
   const renderCalendar = () => {
-    const year = currentCalendarDate.getFullYear();
-    const month = currentCalendarDate.getMonth();
+    // 1. 캘린더가 현재 보여주고 있는 연/월
+    const currentYear = currentCalendarDate.getFullYear();
+    const currentMonth = currentCalendarDate.getMonth(); // 0 ~ 11
+    
     const daysInMonth = getDaysInMonth(currentCalendarDate);
     const firstDay = getFirstDayOfMonth(currentCalendarDate);
     
-    // 오늘 날짜 구하기 (YYYY-MM-DD)
-    const todayObj = new Date();
-    const todayStr = `${todayObj.getFullYear()}-${String(todayObj.getMonth() + 1).padStart(2, '0')}-${String(todayObj.getDate()).padStart(2, '0')}`;
+    // 2. '오늘' 날짜 정보 (숫자로 확보)
+    const now = new Date();
+    const todayYear = now.getFullYear();
+    const todayMonth = now.getMonth();
+    const todayDate = now.getDate();
 
     const days = [];
     
-    // 1. 빈 칸
+    // 빈 칸 (지난달 영역)
     for (let i = 0; i < firstDay; i++) {
-        days.push(<div key={`empty-${i}`} className="min-h-[3rem] w-full pointer-events-none"></div>);
+        days.push(<div key={`empty-${i}`} className="min-h-[3.5rem] w-full pointer-events-none"></div>);
     }
     
-    // 2. 날짜 채우기
+    // 날짜 채우기
     for (let d = 1; d <= daysInMonth; d++) {
-      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      
-      // 이력이 있는 날인지 확인 (승인됨 + 대기중 모두 포함)
-      const hasHistory = requests.some(r => {
-          // r.dateYMD가 있으면 쓰고, 없으면 기존 date나 created_at 사용
-          const rDate = r.dateYMD || r.date || (r.created_at ? r.created_at.split('T')[0] : '');
-          return (r.status === 'APPROVED' || r.status === 'PENDING') && rDate === dateStr;
-      });
+      // (1) 이 날짜가 '오늘'인지 숫자로 비교 (가장 정확함)
+      const isToday = (currentYear === todayYear) && (currentMonth === todayMonth) && (d === todayDate);
 
-      // 오늘인지 확인
-      const isToday = dateStr === todayStr;
+      // (2) 비교용 문자열 생성 (DB 데이터와 비교용: YYYY-MM-DD)
+      // 월/일이 한 자리수일 때 앞에 '0'을 붙여줌
+      const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      
+      // (3) 이력이 있는 날인지 확인
+      const hasHistory = requests.some(r => {
+          // DB 날짜(created_at)나 Mock 날짜를 가져와 YYYY-MM-DD 포맷으로 통일
+          const rawDate = r.created_at || r.createdAt || r.date;
+          if (!rawDate) return false;
+
+          let rDateStr = '';
+          if (rawDate.includes('T')) {
+              rDateStr = rawDate.split('T')[0]; // 2023-11-01T... -> 2023-11-01
+          } else {
+              // Mock 데이터나 이미 가공된 날짜인 경우
+              const dObj = new Date(rawDate);
+              rDateStr = `${dObj.getFullYear()}-${String(dObj.getMonth() + 1).padStart(2, '0')}-${String(dObj.getDate()).padStart(2, '0')}`;
+          }
+
+          // 상태가 APPROVED거나 PENDING인 경우 점 찍기
+          return (r.status === 'APPROVED' || r.status === 'PENDING') && rDateStr === dateStr;
+      });
 
       days.push(
         <button 
@@ -1375,29 +1393,30 @@ export default function App() {
              setIsHistoryModalOpen(true);
              setHistoryDetailReq(null);
           }} 
-          // [수정 포인트] h-10(고정) -> min-h-[3rem] (유동) / flex-col로 쌓기
           className={`
-            w-full min-h-[3rem] p-1 rounded-lg flex flex-col items-center justify-start gap-0.5 transition-all border
+            w-full min-h-[3.5rem] p-1.5 rounded-xl flex flex-col items-start justify-start gap-1 transition-all border relative overflow-visible
             ${isToday 
-                ? 'border-[#7387ff] bg-[#7387ff]/20 text-white shadow-[inset_0_0_10px_rgba(115,135,255,0.2)]' 
-                : 'border-transparent hover:bg-[#2e3038] hover:border-slate-600'}
+                ? 'border-[#7387ff] bg-[#7387ff]/10 text-white shadow-[inset_0_0_15px_rgba(115,135,255,0.15)] z-10' 
+                : 'border-transparent hover:bg-[#2e3038] hover:border-slate-700'}
             ${!isToday && hasHistory ? 'bg-[#2e3038] text-slate-200' : ''}
-            ${!isToday && !hasHistory ? 'text-slate-400' : ''}
+            ${!isToday && !hasHistory ? 'text-slate-500' : ''}
           `}
         >
-          {/* 1. 날짜 숫자 */}
-          <span className={`text-xs leading-none ${isToday ? 'font-bold' : ''}`}>{d}</span>
+          {/* 날짜 숫자 */}
+          <span className={`text-sm leading-none z-10 ${isToday ? 'font-bold text-[#7387ff]' : ''}`}>{d}</span>
           
-          {/* 2. TODAY 뱃지 (이제 겹치지 않고 숫자 아래에 위치합니다) */}
+          {/* TODAY 뱃지 (위치: 우측 상단 고정) */}
           {isToday && (
-            <span className="text-[8px] bg-[#7387ff] text-white px-1 py-0.5 rounded leading-none font-bold mt-0.5">
+            <span className="absolute top-1 right-1 bg-[#7387ff] text-white text-[9px] px-1.5 py-0.5 rounded font-bold shadow-sm z-50">
               TODAY
             </span>
           )}
 
-          {/* 3. 이력 점 (Dot) */}
+          {/* 이력 점 (위치: 좌측 하단) */}
           {hasHistory && (
-             <div className={`w-1.5 h-1.5 rounded-full mt-1 ${isToday ? 'bg-white' : 'bg-[#7387ff]'}`}></div>
+             <div className="flex gap-0.5 mt-auto z-10">
+                 <div className={`w-1.5 h-1.5 rounded-full ${isToday ? 'bg-[#7387ff]' : 'bg-[#7387ff]'}`}></div>
+             </div>
           )}
         </button>
       );
