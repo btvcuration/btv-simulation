@@ -1341,7 +1341,7 @@ export default function App() {
     const daysInMonth = getDaysInMonth(currentCalendarDate);
     const firstDay = getFirstDayOfMonth(currentCalendarDate);
     
-    // 오늘 날짜 (시스템 시간 기준)
+    // 오늘 날짜 구하기 (YYYY-MM-DD)
     const todayObj = new Date();
     const todayStr = `${todayObj.getFullYear()}-${String(todayObj.getMonth() + 1).padStart(2, '0')}-${String(todayObj.getDate()).padStart(2, '0')}`;
 
@@ -1356,10 +1356,12 @@ export default function App() {
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       
-      // 이력이 있는 날인지 확인
+      // [수정됨] 이력이 있는 날인지 확인
+      // 테스트를 위해 'APPROVED' 뿐만 아니라 'PENDING' 상태도 점이 찍히도록 변경했습니다.
       const hasHistory = requests.some(r => {
-          if(r.status !== 'APPROVED') return false;
-          return r.dateYMD === dateStr;
+          // r.dateYMD가 없으면 r.date(YYYY-MM-DD)나 created_at을 사용하여 비교
+          const rDate = r.dateYMD || r.date || (r.created_at ? r.created_at.split('T')[0] : '');
+          return (r.status === 'APPROVED' || r.status === 'PENDING') && rDate === dateStr;
       });
 
       // 오늘인지 확인
@@ -1375,20 +1377,19 @@ export default function App() {
              setHistoryDetailReq(null);
           }} 
           className={`
-            h-10 w-full rounded-lg flex flex-col items-center justify-center relative transition-all group border overflow-visible
+            h-10 w-full rounded-lg flex flex-col items-center justify-center relative transition-all group border
             ${isToday 
-                ? 'border-[#7387ff] bg-[#7387ff]/20 text-white font-bold shadow-[0_0_15px_rgba(115,135,255,0.4)] z-10' 
+                ? 'border-[#7387ff] bg-[#7387ff]/20 text-white font-bold' 
                 : 'border-transparent hover:bg-[#2e3038] hover:border-slate-600'}
-            ${!isToday && hasHistory ? 'text-slate-100 font-semibold bg-[#2e3038]' : ''}
+            ${!isToday && hasHistory ? 'bg-[#2e3038] text-slate-100 font-semibold' : ''}
             ${!isToday && !hasHistory ? 'text-slate-400' : ''}
           `}
         >
-          {/* 날짜 숫자 */}
           <span className="text-sm z-10 relative">{d}</span>
           
-          {/* [수정됨] TODAY 배지: 위치를 안쪽으로 조정하고 z-index 강화 */}
+          {/* [수정됨] TODAY 뱃지: 안쪽으로 이동하여 잘림 방지 */}
           {isToday && (
-            <span className="absolute -top-2 -right-2 text-[8px] bg-[#7387ff] text-white px-1.5 py-0.5 rounded-full font-bold shadow-md z-50 border border-[#191b23]">
+            <span className="absolute top-0.5 right-0.5 text-[8px] bg-[#7387ff] text-white px-1 rounded shadow-sm font-bold z-20">
               TODAY
             </span>
           )}
