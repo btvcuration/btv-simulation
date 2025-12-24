@@ -186,6 +186,19 @@ const useBtvData = (supabase, viewMode) => {
       
       if (!supabase || !supabase.from) return;
 
+      const fetchGnb = async () => {
+      if (USE_MOCK_DATA) {
+        if(gnbList.length === 0 || gnbList === INITIAL_GNB_TREE) {
+            setGnbList(INITIAL_GNB_TREE);
+            setCurrentMenuPath(INITIAL_GNB_TREE[0].name);
+            setCurrentMenuId(INITIAL_GNB_TREE[0].id);
+        }
+        return;
+      }
+      
+      if (!supabase || !supabase.from) return;
+
+      // 1. 데이터 가져오기 (sort_order로 1차 정렬하지만 이것만으론 부족함)
       const { data, error } = await supabase
         .from('gnb_menus')
         .select('*')
@@ -194,7 +207,11 @@ const useBtvData = (supabase, viewMode) => {
       if (data && data.length > 0) {
         const tree = [];
         const map = {};
+        
+        // 2. 맵 생성
         data.forEach(item => { map[item.id] = { ...item, children: [] }; });
+        
+        // 3. 트리 구성
         data.forEach(item => {
             if (item.parent_id) {
                 if(map[item.parent_id]) map[item.parent_id].children.push(map[item.id]);
@@ -202,12 +219,27 @@ const useBtvData = (supabase, viewMode) => {
                 tree.push(map[item.id]);
             }
         });
-        setGnbList(tree);
+
+        // [핵심 수정] 4. 구성된 트리 내부를 sort_order 기준으로 '재정렬' (강제 줄세우기)
+        // 이 과정이 없으면 DB에서 순서가 바뀌어도 화면엔 반영이 안 될 수 있음
+        const sortNodes = (nodes) => {
+            return nodes.sort((a, b) => a.sort_order - b.sort_order).map(node => {
+                if (node.children && node.children.length > 0) {
+                    node.children = sortNodes(node.children); // 재귀 정렬
+                }
+                return node;
+            });
+        };
+
+        const sortedTree = sortNodes(tree);
+        setGnbList(sortedTree);
+
+        // 초기 선택값 설정 로직
         if (currentMenuId) {
             const current = data.find(d => d.id === currentMenuId);
             if (current) setCurrentMenuPath(current.name);
             else {
-                const home = tree.find(m => m.name === '홈') || tree[0];
+                const home = sortedTree.find(m => m.name === '홈') || sortedTree[0];
                 if(home) { setCurrentMenuId(home.id); setCurrentMenuPath(home.name); }
             }
         }
@@ -369,122 +401,122 @@ const useBtvData = (supabase, viewMode) => {
         }
     };
 
-const reorderMenu = async (dragId, dropId, type) => {
-    if (dragId === dropId) return;
-    
-    const strDragId = String(dragId);
-    const strDropId = String(dropId);
-
-    console.log(`[Move] ${type}: ${strDragId} -> ${strDropId}`);
-
-    const newList = JSON.parse(JSON.stringify(gnbList));
-
-    if (type === 'GNB') {
-      // [1] GNB 순서 변경 (기존 동일)
-      const dragIndex = newList.findIndex(i => String(i.id) === strDragId);
-      const dropIndex = newList.findIndex(i => String(i.id) === strDropId);
+  const reorderMenu = async (dragId, dropId, type) => {
+      if (dragId === dropId) return;
       
-      if (dragIndex > -1 && dropIndex > -1) {
-        const [dragItem] = newList.splice(dragIndex, 1);
-        newList.splice(dropIndex, 0, dragItem);
-        setGnbList(newList);
-
-        if (!USE_MOCK_DATA) {
-          const updates = newList.map((item, index) => 
-            supabase.from('gnb_menus').update({ sort_order: index }).eq('id', item.id)
-          );
-          await Promise.all(updates);
-        }
-      }
-    } else {
-      // [2] 하위 메뉴 순서 변경 (디버깅 강화)
-      let sourceGnb = null;
-      let sourceIndex = -1;
-      let targetGnb = null;
-      let targetIndex = -1;
-
-      // 위치 찾기
-      for (let gnb of newList) {
-        const idx = gnb.children.findIndex(c => String(c.id) === strDragId);
-        if (idx > -1) { sourceGnb = gnb; sourceIndex = idx; break; }
-      }
-      for (let gnb of newList) {
-        const idx = gnb.children.findIndex(c => String(c.id) === strDropId);
-        if (idx > -1) { targetGnb = gnb; targetIndex = idx; break; }
-      }
-
-      // 예외: 헤더로 드롭
-      if (!targetGnb) {
-         const gnbHeaderIndex = newList.findIndex(g => String(g.id) === strDropId);
-         if (gnbHeaderIndex > -1 && sourceGnb) {
-             targetGnb = newList[gnbHeaderIndex];
-             targetIndex = 0;
-         } else {
-             return;
-         }
-      }
-
-      if (sourceGnb && targetGnb) {
-        const [draggedItem] = sourceGnb.children.splice(sourceIndex, 1);
-        targetGnb.children.splice(targetIndex, 0, draggedItem);
-
-        // UI 즉시 반영
-        setGnbList(newList);
-
-        // [DB 저장] 데이터 유효성 검사 추가
-        if (!USE_MOCK_DATA) {
-          // 중요: 부모 ID가 유효한지 확인
-          if (!targetGnb.id) {
-             console.error('⛔ [Critical] 이동할 타겟 그룹(부모)의 ID가 없습니다!', targetGnb);
-             alert('오류: 부모 메뉴의 ID를 찾을 수 없어 저장에 실패했습니다.');
-             return;
+      const strDragId = String(dragId);
+      const strDropId = String(dropId);
+  
+      console.log(`[Move] ${type}: ${strDragId} -> ${strDropId}`);
+  
+      const newList = JSON.parse(JSON.stringify(gnbList));
+  
+      if (type === 'GNB') {
+        // [1] GNB 순서 변경 (기존 동일)
+        const dragIndex = newList.findIndex(i => String(i.id) === strDragId);
+        const dropIndex = newList.findIndex(i => String(i.id) === strDropId);
+        
+        if (dragIndex > -1 && dropIndex > -1) {
+          const [dragItem] = newList.splice(dragIndex, 1);
+          newList.splice(dropIndex, 0, dragItem);
+          setGnbList(newList);
+  
+          if (!USE_MOCK_DATA) {
+            const updates = newList.map((item, index) => 
+              supabase.from('gnb_menus').update({ sort_order: index }).eq('id', item.id)
+            );
+            await Promise.all(updates);
           }
-
-          try {
-            const promises = [];
-
-            // 타겟 그룹 업데이트
-            const targetUpdates = targetGnb.children.map((child, index) => {
-              // 페이로드 확인용 로그
-              // console.log(`업데이트 예정: ID(${child.id}) -> Parent(${targetGnb.id}), Order(${index})`);
+        }
+      } else {
+        // [2] 하위 메뉴 순서 변경 (디버깅 강화)
+        let sourceGnb = null;
+        let sourceIndex = -1;
+        let targetGnb = null;
+        let targetIndex = -1;
+  
+        // 위치 찾기
+        for (let gnb of newList) {
+          const idx = gnb.children.findIndex(c => String(c.id) === strDragId);
+          if (idx > -1) { sourceGnb = gnb; sourceIndex = idx; break; }
+        }
+        for (let gnb of newList) {
+          const idx = gnb.children.findIndex(c => String(c.id) === strDropId);
+          if (idx > -1) { targetGnb = gnb; targetIndex = idx; break; }
+        }
+  
+        // 예외: 헤더로 드롭
+        if (!targetGnb) {
+           const gnbHeaderIndex = newList.findIndex(g => String(g.id) === strDropId);
+           if (gnbHeaderIndex > -1 && sourceGnb) {
+               targetGnb = newList[gnbHeaderIndex];
+               targetIndex = 0;
+           } else {
+               return;
+           }
+        }
+  
+        if (sourceGnb && targetGnb) {
+          const [draggedItem] = sourceGnb.children.splice(sourceIndex, 1);
+          targetGnb.children.splice(targetIndex, 0, draggedItem);
+  
+          // UI 즉시 반영
+          setGnbList(newList);
+  
+          // [DB 저장] 데이터 유효성 검사 추가
+          if (!USE_MOCK_DATA) {
+            // 중요: 부모 ID가 유효한지 확인
+            if (!targetGnb.id) {
+               console.error('⛔ [Critical] 이동할 타겟 그룹(부모)의 ID가 없습니다!', targetGnb);
+               alert('오류: 부모 메뉴의 ID를 찾을 수 없어 저장에 실패했습니다.');
+               return;
+            }
+  
+            try {
+              const promises = [];
+  
+              // 타겟 그룹 업데이트
+              const targetUpdates = targetGnb.children.map((child, index) => {
+                // 페이로드 확인용 로그
+                // console.log(`업데이트 예정: ID(${child.id}) -> Parent(${targetGnb.id}), Order(${index})`);
+                
+                if (!child.id) return Promise.resolve(); // ID 없으면 스킵
+  
+                return supabase.from('gnb_menus')
+                  .update({ 
+                    sort_order: index, 
+                    parent_id: targetGnb.id // 여기서 400 에러 발생 가능성 높음
+                  })
+                  .eq('id', child.id);
+              });
+              promises.push(...targetUpdates);
+  
+              // 소스 그룹 업데이트 (다른 그룹 이동 시)
+              if (sourceGnb.id !== targetGnb.id) {
+                const sourceUpdates = sourceGnb.children.map((child, index) => 
+                  supabase.from('gnb_menus').update({ sort_order: index }).eq('id', child.id)
+                );
+                promises.push(...sourceUpdates);
+              }
+  
+              const results = await Promise.all(promises);
               
-              if (!child.id) return Promise.resolve(); // ID 없으면 스킵
-
-              return supabase.from('gnb_menus')
-                .update({ 
-                  sort_order: index, 
-                  parent_id: targetGnb.id // 여기서 400 에러 발생 가능성 높음
-                })
-                .eq('id', child.id);
-            });
-            promises.push(...targetUpdates);
-
-            // 소스 그룹 업데이트 (다른 그룹 이동 시)
-            if (sourceGnb.id !== targetGnb.id) {
-              const sourceUpdates = sourceGnb.children.map((child, index) => 
-                supabase.from('gnb_menus').update({ sort_order: index }).eq('id', child.id)
-              );
-              promises.push(...sourceUpdates);
+              // 400 에러 감지
+              const errorResult = results.find(r => r.error);
+              if (errorResult) {
+                  console.error('🔥 Supabase Error (400 Bad Request):', errorResult.error);
+                  alert(`저장 실패: ${errorResult.error.message}\n(데이터 형식이 맞지 않습니다)`);
+              } else {
+                  console.log('✅ 순서 변경 저장 성공');
+              }
+  
+            } catch (err) {
+              console.error('시스템 오류:', err);
             }
-
-            const results = await Promise.all(promises);
-            
-            // 400 에러 감지
-            const errorResult = results.find(r => r.error);
-            if (errorResult) {
-                console.error('🔥 Supabase Error (400 Bad Request):', errorResult.error);
-                alert(`저장 실패: ${errorResult.error.message}\n(데이터 형식이 맞지 않습니다)`);
-            } else {
-                console.log('✅ 순서 변경 저장 성공');
-            }
-
-          } catch (err) {
-            console.error('시스템 오류:', err);
           }
         }
       }
-    }
-  };
+    };
   
     const moveBlock = (index, direction) => {
         // 읽기 전용이거나 히스토리 모드일 때는 작동하지 않음
