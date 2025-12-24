@@ -269,46 +269,50 @@ const useBtvData = (supabase, viewMode) => {
             
             if (data) {
                 const formattedRequests = data.map(r => {
-                    let type = r.snapshot_new ? 'PUBLISH' : 'VERTICAL'; 
-                    // remarks가 '[TYPE]' 형식으로 시작하면 해당 타입을 추출 (description 파싱 대신 단순화)
-                    // 실제 DB에서는 description에 통합 저장되므로, 꺼내올 때 파싱 로직이 필요할 수 있으나
-                    // 여기서는 기존 로직 호환성을 위해 remarks 사용 (DB에 없다면 description에서 파싱해야 함)
-                    // 이번 수정에서는 insert 시 remarks 제외하고 description에 넣는 것이 핵심.
-                    // fetch 시에는 description에서 파싱하는 로직을 추가하거나, 기존 remarks가 있다면 사용.
-                    
-                    // description에서 [요청 타입] 추출 시도
-                    if (!r.remarks && r.description) {
-                         const typeMatch = r.description.match(/\[요청 타입\]\s*([A-Z0-9_]+)/);
-                         if (typeMatch) type = typeMatch[1];
-                         
-                         const remarksMatch = r.description.match(/\[비고\]\s*(.*)/);
-                         if (remarksMatch) r.remarks = remarksMatch[1];
-                         
-                         const jiraMatch = r.description.match(/\[Jira 티켓\]\s*(.*)/);
-                         if (jiraMatch && jiraMatch[1] !== '-') r.jiraLink = jiraMatch[1];
-                    }
-
-                    return {
-                        id: r.id, 
-                        title: r.title, 
-                        requester: r.requester, 
-                        team: r.team, 
-                        gnb: r.gnb_target, 
-                        type: type, 
-                        desc: r.description, 
-                        location: r.location, 
-                        status: r.status, 
-                        date: new Date(r.created_at).toLocaleDateString(),
-                        createdAt: new Date(r.created_at).toLocaleString(),
-                        remarks: r.remarks, 
-                        jiraLink: r.jira_link,
-                        changes: r.changes || [],
-                        snapshot: r.snapshot_new, 
-                        originalSnapshot: r.snapshot_original, 
-                        menuPath: r.gnb_target 
-                    };
-                });
-                setRequests(formattedRequests);
+                  let type = r.snapshot_new ? 'PUBLISH' : 'VERTICAL'; 
+                  
+                  // description에서 [요청 타입] 등 파싱 로직 (기존 유지)
+                  if (!r.remarks && r.description) {
+                       const typeMatch = r.description.match(/\[요청 타입\]\s*([A-Z0-9_]+)/);
+                       if (typeMatch) type = typeMatch[1];
+                       
+                       const remarksMatch = r.description.match(/\[비고\]\s*(.*)/);
+                       if (remarksMatch) r.remarks = remarksMatch[1];
+                       
+                       const jiraMatch = r.description.match(/\[Jira 티켓\]\s*(.*)/);
+                       if (jiraMatch && jiraMatch[1] !== '-') r.jiraLink = jiraMatch[1];
+                  }
+              
+                  // [👇 여기부터 추가/수정된 부분입니다] 
+                  // 캘린더 비교를 위해 YYYY-MM-DD 형식의 문자열을 강제로 만듭니다.
+                  const rawDateObj = new Date(r.created_at || r.createdAt); 
+                  const dateYMD = `${rawDateObj.getFullYear()}-${String(rawDateObj.getMonth() + 1).padStart(2, '0')}-${String(rawDateObj.getDate()).padStart(2, '0')}`;
+              
+                  return {
+                      id: r.id, 
+                      title: r.title, 
+                      requester: r.requester, 
+                      team: r.team, 
+                      gnb: r.gnb_target, 
+                      type: type, 
+                      desc: r.description, 
+                      location: r.location, 
+                      status: r.status, 
+                      
+                      // [👇 날짜 관련 필드 수정]
+                      date: dateYMD,       // 화면에 보여줄 때도 이 포맷 사용
+                      dateYMD: dateYMD,    // 캘린더에서 점(Dot) 찍을 때 비교할 키값 (핵심!)
+                      createdAt: new Date(r.created_at || r.createdAt).toLocaleString(),
+                      
+                      remarks: r.remarks, 
+                      jiraLink: r.jira_link,
+                      changes: r.changes || [], 
+                      snapshot: r.snapshot_new, 
+                      originalSnapshot: r.snapshot_original, 
+                      menuPath: r.gnb_target 
+                  };
+              });
+              setRequests(formattedRequests);
             }
         };
         fetchRequests(); 
@@ -1337,56 +1341,64 @@ export default function App() {
     const daysInMonth = getDaysInMonth(currentCalendarDate);
     const firstDay = getFirstDayOfMonth(currentCalendarDate);
     
-    // [추가] 오늘 날짜 스트링 구하기 (YYYY-MM-DD)
+    // 오늘 날짜 구하기 (YYYY-MM-DD)
     const todayObj = new Date();
     const todayStr = `${todayObj.getFullYear()}-${String(todayObj.getMonth() + 1).padStart(2, '0')}-${String(todayObj.getDate()).padStart(2, '0')}`;
 
     const days = [];
     
-    // 빈 칸 채우기
-    for (let i = 0; i < firstDay; i++) days.push(<div key={`empty-${i}`} className="h-9"></div>);
+    // 1. 빈 칸 (지난달 날짜 영역)
+    for (let i = 0; i < firstDay; i++) {
+        days.push(<div key={`empty-${i}`} className="h-10 w-full pointer-events-none"></div>);
+    }
     
-    // 날짜 채우기
+    // 2. 날짜 채우기
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       
-      // [로직] 이력이 있는 날인지 확인 (승인된 요청 기준)
+      // [수정됨] 이력이 있는 날인지 확인 (dateYMD 필드 사용)
       const hasHistory = requests.some(r => {
+          // 승인된(APPROVED) 건만 이력으로 인정
           if(r.status !== 'APPROVED') return false;
-          // DB의 created_at (YYYY-MM-DDTHH:mm:ss...)에서 날짜만 잘라서 비교
-          const rDate = r.created_at ? r.created_at.split('T')[0] : r.date; 
-          return rDate === dateStr;
+          // 아까 만든 dateYMD와 달력 날짜 비교
+          return r.dateYMD === dateStr;
       });
 
-      // [로직] 오늘인지 확인
+      // 오늘인지 확인
       const isToday = dateStr === todayStr;
 
       days.push(
         <button 
           key={d} 
           onClick={() => {
-             // 1. 팝업 닫기 -> 2. 날짜 설정 -> 3. 메인 모달 열기
+             // 날짜 클릭 시 동작
              setHistorySelectedDate(dateStr); 
              setIsCalendarPopupOpen(false); 
              setIsHistoryModalOpen(true);
              setHistoryDetailReq(null);
           }} 
           className={`
-            h-9 rounded-lg flex flex-col items-center justify-center relative transition-all group
-            ${isToday ? 'border border-[#7387ff] bg-[#7387ff]/10 text-white font-bold' : 'border border-transparent'} 
-            ${!isToday && hasHistory ? 'text-white font-bold bg-[#2e3038]' : ''}
-            ${!isToday && !hasHistory ? 'text-slate-400 hover:bg-[#2e3038] hover:text-slate-200' : ''}
+            h-10 w-full rounded-lg flex flex-col items-center justify-center relative transition-all group border
+            ${isToday 
+                ? 'border-[#7387ff] bg-[#7387ff]/20 text-white font-bold shadow-[0_0_10px_rgba(115,135,255,0.3)]' 
+                : 'border-transparent hover:bg-[#2e3038] hover:border-slate-600'}
+            ${!isToday && hasHistory ? 'text-slate-100 font-semibold bg-[#2e3038]' : ''}
+            ${!isToday && !hasHistory ? 'text-slate-400' : ''}
           `}
-          title={hasHistory ? '변경 이력 있음' : ''}
         >
-          <span className="text-xs z-10 relative">{d}</span>
+          {/* 날짜 숫자 */}
+          <span className="text-sm z-10">{d}</span>
           
-          {/* 오늘 날짜 표시 (상단 작은 텍스트) - 선택 사항 */}
-          {isToday && <span className="absolute -top-1.5 right-0 text-[8px] text-[#7387ff] bg-[#191b23] px-1 rounded-full font-bold">TODAY</span>}
+          {/* TODAY 배지 (오늘인 경우 우측 상단 표시) */}
+          {isToday && (
+            <span className="absolute -top-1.5 -right-1 text-[8px] bg-[#7387ff] text-white px-1 rounded shadow-sm leading-tight z-20">
+              TODAY
+            </span>
+          )}
 
-          {/* 이력이 있는 날 표시 (하단 점) */}
+          {/* 이력 점 (Dot) */}
           {hasHistory && (
-             <div className={`w-1 h-1 rounded-full mt-0.5 ${isToday ? 'bg-white' : 'bg-[#7387ff]'}`}></div>
+             <div className={`w-1.5 h-1.5 rounded-full mt-1 ${isToday ? 'bg-white' : 'bg-[#7387ff] shadow-[0_0_5px_#7387ff]'}`}></div>
           )}
         </button>
       );
