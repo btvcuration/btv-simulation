@@ -403,117 +403,105 @@ const useBtvData = (supabase, viewMode) => {
 
   const reorderMenu = async (dragId, dropId, type) => {
       if (dragId === dropId) return;
-      
       const strDragId = String(dragId);
       const strDropId = String(dropId);
   
-      console.log(`[Move] ${type}: ${strDragId} -> ${strDropId}`);
-  
+      // 깊은 복사
       const newList = JSON.parse(JSON.stringify(gnbList));
   
-      if (type === 'GNB') {
-        // [1] GNB 순서 변경 (기존 동일)
-        const dragIndex = newList.findIndex(i => String(i.id) === strDragId);
-        const dropIndex = newList.findIndex(i => String(i.id) === strDropId);
-        
-        if (dragIndex > -1 && dropIndex > -1) {
-          const [dragItem] = newList.splice(dragIndex, 1);
-          newList.splice(dropIndex, 0, dragItem);
-          setGnbList(newList);
+      // [헬퍼 함수] 리스트 내 이동 처리 및 인덱스 재할당
+      const moveAndReindex = (items, dId, targetIndex) => {
+          const dragIdx = items.findIndex(i => String(i.id) === dId);
+          if (dragIdx === -1) return null;
+          
+          const [item] = items.splice(dragIdx, 1);
+          items.splice(targetIndex, 0, item);
+          
+          // [핵심] 순서를 0부터 다시 싹 매기기 (DB 꼬임 방지)
+          return items.map((itm, idx) => ({ ...itm, sort_order: idx }));
+      };
   
-          if (!USE_MOCK_DATA) {
-            const updates = newList.map((item, index) => 
-              supabase.from('gnb_menus').update({ sort_order: index }).eq('id', item.id)
+      if (type === 'GNB') {
+        // 1. GNB 이동
+        const dropIndex = newList.findIndex(i => String(i.id) === strDropId);
+        if (dropIndex === -1) return;
+  
+        const updatedList = moveAndReindex(newList, strDragId, dropIndex);
+        if (!updatedList) return;
+  
+        setGnbList(updatedList); // 화면 즉시 반영
+  
+        if (!USE_MOCK_DATA) {
+            // 전체 순서 업데이트
+            const updates = updatedList.map(item => 
+                supabase.from('gnb_menus').update({ sort_order: item.sort_order }).eq('id', item.id)
             );
             await Promise.all(updates);
-          }
         }
+  
       } else {
-        // [2] 하위 메뉴 순서 변경 (디버깅 강화)
+        // 2. 서브 메뉴 이동
         let sourceGnb = null;
-        let sourceIndex = -1;
         let targetGnb = null;
-        let targetIndex = -1;
+        let targetIndex = 0;
   
         // 위치 찾기
         for (let gnb of newList) {
-          const idx = gnb.children.findIndex(c => String(c.id) === strDragId);
-          if (idx > -1) { sourceGnb = gnb; sourceIndex = idx; break; }
-        }
-        for (let gnb of newList) {
-          const idx = gnb.children.findIndex(c => String(c.id) === strDropId);
-          if (idx > -1) { targetGnb = gnb; targetIndex = idx; break; }
+            if (gnb.children.some(c => String(c.id) === strDragId)) sourceGnb = gnb;
+            const dropIdx = gnb.children.findIndex(c => String(c.id) === strDropId);
+            if (dropIdx > -1) { targetGnb = gnb; targetIndex = dropIdx; }
         }
   
-        // 예외: 헤더로 드롭
+        // 예외: 헤더 위로 드롭 시
         if (!targetGnb) {
-           const gnbHeaderIndex = newList.findIndex(g => String(g.id) === strDropId);
-           if (gnbHeaderIndex > -1 && sourceGnb) {
-               targetGnb = newList[gnbHeaderIndex];
-               targetIndex = 0;
-           } else {
-               return;
-           }
+            const headerIdx = newList.findIndex(g => String(g.id) === strDropId);
+            if (headerIdx > -1) { targetGnb = newList[headerIdx]; targetIndex = 0; }
+            else return; 
+        }
+        if (!sourceGnb) return;
+  
+        // 이동 실행
+        const dragItemIndex = sourceGnb.children.findIndex(c => String(c.id) === strDragId);
+        const [dragItem] = sourceGnb.children.splice(dragItemIndex, 1);
+        
+        // 같은 그룹 내 아래로 이동 시 인덱스 보정 없이 그대로 삽입 (Swap 효과)
+        targetGnb.children.splice(targetIndex, 0, dragItem);
+  
+        // [핵심] 변경된 그룹의 자식들에게 번호표(sort_order) 새로 발급
+        targetGnb.children.forEach((child, idx) => { child.sort_order = idx; });
+        if (sourceGnb.id !== targetGnb.id) {
+            sourceGnb.children.forEach((child, idx) => { child.sort_order = idx; });
         }
   
-        if (sourceGnb && targetGnb) {
-          const [draggedItem] = sourceGnb.children.splice(sourceIndex, 1);
-          targetGnb.children.splice(targetIndex, 0, draggedItem);
+        setGnbList(newList); // 화면 즉시 반영
   
-          // UI 즉시 반영
-          setGnbList(newList);
-  
-          // [DB 저장] 데이터 유효성 검사 추가
-          if (!USE_MOCK_DATA) {
-            // 중요: 부모 ID가 유효한지 확인
-            if (!targetGnb.id) {
-               console.error('⛔ [Critical] 이동할 타겟 그룹(부모)의 ID가 없습니다!', targetGnb);
-               alert('오류: 부모 메뉴의 ID를 찾을 수 없어 저장에 실패했습니다.');
-               return;
-            }
-  
+        if (!USE_MOCK_DATA) {
             try {
-              const promises = [];
-  
-              // 타겟 그룹 업데이트
-              const targetUpdates = targetGnb.children.map((child, index) => {
-                // 페이로드 확인용 로그
-                // console.log(`업데이트 예정: ID(${child.id}) -> Parent(${targetGnb.id}), Order(${index})`);
-                
-                if (!child.id) return Promise.resolve(); // ID 없으면 스킵
-  
-                return supabase.from('gnb_menus')
-                  .update({ 
-                    sort_order: index, 
-                    parent_id: targetGnb.id // 여기서 400 에러 발생 가능성 높음
-                  })
-                  .eq('id', child.id);
-              });
-              promises.push(...targetUpdates);
-  
-              // 소스 그룹 업데이트 (다른 그룹 이동 시)
-              if (sourceGnb.id !== targetGnb.id) {
-                const sourceUpdates = sourceGnb.children.map((child, index) => 
-                  supabase.from('gnb_menus').update({ sort_order: index }).eq('id', child.id)
-                );
-                promises.push(...sourceUpdates);
-              }
-  
-              const results = await Promise.all(promises);
-              
-              // 400 에러 감지
-              const errorResult = results.find(r => r.error);
-              if (errorResult) {
-                  console.error('🔥 Supabase Error (400 Bad Request):', errorResult.error);
-                  alert(`저장 실패: ${errorResult.error.message}\n(데이터 형식이 맞지 않습니다)`);
-              } else {
-                  console.log('✅ 순서 변경 저장 성공');
-              }
-  
-            } catch (err) {
-              console.error('시스템 오류:', err);
+                const promises = [];
+                // 타겟 그룹 전체 업데이트 (부모 ID 변경 포함)
+                targetGnb.children.forEach(child => {
+                    promises.push(
+                        supabase.from('gnb_menus')
+                            .update({ sort_order: child.sort_order, parent_id: targetGnb.id })
+                            .eq('id', child.id)
+                    );
+                });
+                // 소스 그룹 전체 업데이트 (다른 그룹이었을 경우)
+                if (sourceGnb.id !== targetGnb.id) {
+                    sourceGnb.children.forEach(child => {
+                        promises.push(
+                            supabase.from('gnb_menus')
+                                .update({ sort_order: child.sort_order })
+                                .eq('id', child.id)
+                        );
+                    });
+                }
+                await Promise.all(promises);
+                console.log("✅ 순서 저장 완료");
+            } catch (e) {
+                console.error("❌ 저장 실패", e);
+                alert("순서 저장 중 오류가 발생했습니다.");
             }
-          }
         }
       }
     };
