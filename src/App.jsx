@@ -677,11 +677,11 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
   return (
     <div className={`p-4 rounded-lg border ${blockStyle.border} ${blockStyle.bg} ${containerStyle} ${dragStyle} relative transition-colors pt-6`}>
       {!readOnly && !isOriginal && (
-         <div className="absolute top-0 left-0 right-0 h-6 flex justify-center items-center rounded-t-lg group/handle bg-white/5 hover:bg-white/10 transition-colors z-20">
-             <div className="flex items-center gap-4 text-slate-500">
-                 <button onClick={(e) => { e.stopPropagation(); onMoveUp(); }} disabled={isFirst} className={`p-0.5 hover:text-white hover:bg-slate-600 rounded transition-colors ${isFirst ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}`} title="위로 이동"><ChevronDown size={12} className="rotate-180"/></button>
-                 <div className="w-8 h-1 bg-slate-600 rounded-full group-hover/handle:bg-slate-400 cursor-grab active:cursor-grabbing"></div>
-                 <button onClick={(e) => { e.stopPropagation(); onMoveDown(); }} disabled={isLast} className={`p-0.5 hover:text-white hover:bg-slate-600 rounded transition-colors ${isLast ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}`} title="아래로 이동"><ChevronDown size={12} /></button>
+         <div className="absolute -top-3 left-0 right-0 h-6 flex justify-center items-center z-20 opacity-0 group-hover:opacity-100 transition-opacity">
+             <div className="flex items-center gap-1 bg-[#161820] border border-slate-600 rounded-full px-2 py-0.5 shadow-md">
+                 <button onClick={(e) => { e.stopPropagation(); onMoveUp(); }} disabled={isFirst} className={`p-1 hover:text-white hover:bg-slate-600 rounded-full transition-colors ${isFirst ? 'text-slate-600 cursor-not-allowed' : 'text-slate-400 cursor-pointer'}`} title="위로 이동"><ChevronDown size={12} className="rotate-180"/></button>
+                 <div className="w-px h-3 bg-slate-600 mx-1"></div>
+                 <button onClick={(e) => { e.stopPropagation(); onMoveDown(); }} disabled={isLast} className={`p-1 hover:text-white hover:bg-slate-600 rounded-full transition-colors ${isLast ? 'text-slate-600 cursor-not-allowed' : 'text-slate-400 cursor-pointer'}`} title="아래로 이동"><ChevronDown size={12} /></button>
              </div>
          </div>
       )}
@@ -908,6 +908,33 @@ export default function App() {
     moveBlock
   } = useBtvData(supabase, viewMode);
 
+  const [modalState, setModalState] = useState({ isOpen: false, type: null, data: null, position: 'BOTTOM' });
+
+  // 2. 스크롤 박스 제어용 Ref
+  const scrollContainerRef = useRef(null);
+
+  // 3. 드래그 시 자동 스크롤 함수
+  const handleScrollOnDrag = (e) => {
+    if (!isDragEnabled || !scrollContainerRef.current) return;
+
+    const container = scrollContainerRef.current;
+    const { top, bottom } = container.getBoundingClientRect();
+    const mouseY = e.clientY;
+    
+    // 감지 영역 (상하단 100px)
+    const threshold = 100;
+    const scrollSpeed = 20; // 스크롤 속도
+
+    // 마우스가 상단 영역 -> 위로 스크롤
+    if (mouseY < top + threshold) {
+        container.scrollTop -= scrollSpeed;
+    }
+    // 마우스가 하단 영역 -> 아래로 스크롤
+    else if (mouseY > bottom - threshold) {
+        container.scrollTop += scrollSpeed;
+    }
+  };
+
   useEffect(() => {
     if (!USE_MOCK_DATA) {
       try {
@@ -953,7 +980,8 @@ export default function App() {
 
   const [viewRequest, setViewRequest] = useState(null);
   const [historyDate, setHistoryDate] = useState('');
-  const [modalState, setModalState] = useState({ isOpen: false, type: null, data: null });
+  const [modalState, setModalState] = useState({ isOpen: false, type: null, data: null, position: 'BOTTOM' });
+  const scrollContainerRef = useRef(null);
   
   const todayStr = new Date().toISOString().split('T')[0];
   const [newRequestData, setNewRequestData] = useState({ 
@@ -1058,10 +1086,11 @@ export default function App() {
   };
 
   const handleUpdateBlock = (blockId, updates) => setBlocks(prev => prev.map(block => block.id === blockId ? { ...block, ...updates } : block));
-  const openAddBlockModal = () => {
+  const openAddBlockModal = (position = 'BOTTOM') => {
     setBlockCategory('CONTENT');
     setNewBlockData({ title: '', type: 'VERTICAL', showPreview: false, contentIdType: 'LIBRARY', contentId: '', remarks: '', isTarget: false, targetSeg: '', useLeadingBanner: false, leadingBannerType: '1-COL', leadingBannerTitle: '배너', bannerTitle: '배너', showTitle: true });
-    setModalState({ isOpen: true, type: 'ADD_BLOCK', data: null });
+    // 모달 state에 position 저장
+    setModalState({ isOpen: true, type: 'ADD_BLOCK', data: null, position }); 
   };
 
   const confirmAddBlock = () => {
@@ -1117,7 +1146,28 @@ export default function App() {
       if (newBlockData.useLeadingBanner) newBlock.leadingBanners = [{ title: newBlockData.leadingBannerTitle || '배너' }];
     }
     
-    setBlocks(prev => [...prev, newBlock]);
+    // 위치(TOP/BOTTOM)를 구분하여 추가하는 방식 (이걸로 교체)
+    setBlocks(prev => {
+        const newBlocks = [...prev];
+        
+        if (modalState.position === 'TOP') {
+            // 상단 추가: 고정형 블록(빅배너 등) 다음 위치에 삽입
+            let insertIndex = 0;
+            for (let i = 0; i < newBlocks.length; i++) {
+                if (['BIG_BANNER', 'TODAY_BTV'].includes(newBlocks[i].type)) {
+                    insertIndex = i + 1;
+                } else {
+                    break;
+                }
+            }
+            newBlocks.splice(insertIndex, 0, newBlock);
+            return newBlocks;
+        } else {
+            // 하단 추가: 맨 뒤에 추가
+            return [...newBlocks, newBlock];
+        }
+    });
+    
     setModalState({ isOpen: false, type: null, data: null });
   };
   const handleDelete = (id, e) => { e.preventDefault(); e.stopPropagation(); setModalState({ isOpen: true, type: 'DELETE_BLOCK', data: id }); };
@@ -1868,7 +1918,7 @@ export default function App() {
                 <div className="hidden md:flex items-center gap-2">
                   <button onClick={() => setCompareMode(!compareMode)} className={`flex items-center gap-1 px-3 py-1.5 rounded text-xs transition-colors ${compareMode ? 'bg-orange-500/20 text-orange-400 border border-orange-500/50' : 'bg-[#191b23] text-slate-400 border border-[#2e3038] hover:text-white'}`}>비교</button>
                   <button onClick={() => setShowInbox(!showInbox)} className={`relative px-3 py-1.5 rounded text-xs flex items-center gap-1 transition-colors ${showInbox ? 'bg-slate-700 text-white' : 'bg-[#191b23] text-slate-400 border border-[#2e3038] hover:text-white'}`}><Inbox size={14} /> 요청함</button>
-                  <button onClick={handleReset} className="px-3 py-1.5 bg-[#191b23] border border-[#2e3038] hover:bg-[#2e3038] rounded text-xs text-slate-400 hover:text-white transition-colors">원복</button>
+                  <button onClick={() => openAddBlockModal('TOP')} className="px-3 py-1.5 bg-[#191b23] border border-[#2e3038] hover:bg-[#2e3038] rounded text-xs text-white flex items-center gap-1 transition-colors"><Plus size={14} /> 추가</button>
                   <button onClick={openAddBlockModal} className="px-3 py-1.5 bg-[#191b23] border border-[#2e3038] hover:bg-[#2e3038] rounded text-xs text-white flex items-center gap-1 transition-colors"><Plus size={14} /> 추가</button>
                 </div>
                 <button onClick={handleOpenSaveModal} className="bg-[#7387ff] hover:bg-[#5b6dbf] text-white p-2 md:px-4 md:py-1.5 rounded text-xs font-bold flex items-center gap-1 shadow-lg shadow-indigo-500/20 transition-colors" title="저장"><Save size={16} /> <span className="hidden md:inline">저장</span></button>
@@ -1878,7 +1928,7 @@ export default function App() {
                     <div className="absolute right-0 top-full mt-2 bg-[#191b23] border border-[#2e3038] rounded-lg shadow-xl w-32 overflow-hidden flex flex-col z-50">
                       <button onClick={() => { setCompareMode(!compareMode); setIsActionMenuOpen(false); }} className="px-4 py-3 text-xs text-left hover:bg-[#2e3038] text-slate-300 border-b border-[#2e3038]">비교 모드 {compareMode ? 'OFF' : 'ON'}</button>
                       <button onClick={() => { setShowInbox(!showInbox); setIsActionMenuOpen(false); }} className="px-4 py-3 text-xs text-left hover:bg-[#2e3038] text-slate-300 border-b border-[#2e3038]">요청함 열기</button>
-                      <button onClick={() => { handleReset(); setIsActionMenuOpen(false); }} className="px-4 py-3 text-xs text-left hover:bg-[#2e3038] text-slate-300 border-b border-[#2e3038]">원복</button>
+                      <button onClick={() => { openAddBlockModal('TOP'); setIsActionMenuOpen(false); }} className="px-4 py-3 text-xs text-left hover:bg-[#2e3038] text-white font-bold">블록 추가</button>
                       <button onClick={() => { openAddBlockModal(); setIsActionMenuOpen(false); }} className="px-4 py-3 text-xs text-left hover:bg-[#2e3038] text-white font-bold">블록 추가</button>
                     </div>
                   )}
@@ -1893,7 +1943,11 @@ export default function App() {
         {/* EDITOR & HISTORY VIEW */}
         {(viewMode === 'EDITOR' || viewMode === 'HISTORY') && (
           <div className="flex-1 flex overflow-hidden">
-            <div className={`flex-1 overflow-y-auto p-6 relative bg-gradient-to-b from-[#100d1d] to-[#0a0812] ${viewMode === 'HISTORY' ? 'grayscale-[0.3]' : ''}`}>
+            <div 
+                ref={scrollContainerRef}
+                onDragOver={(e) => { e.preventDefault(); handleScrollOnDrag(e); }}
+                className={`flex-1 overflow-y-auto p-6 relative bg-gradient-to-b from-[#100d1d] to-[#0a0812] ${viewMode === 'HISTORY' ? 'grayscale-[0.3]' : ''}`}
+            >
               <div className={`max-w-[1400px] mx-auto transition-all ${compareMode ? 'grid grid-cols-2 gap-8' : ''}`}>
                 {compareMode && (<div className="relative"><div className="sticky top-0 z-10 mb-4 flex justify-between items-center bg-[#100d1d]/80 backdrop-blur py-2 border-b border-orange-500/30"><span className="text-orange-400 text-sm font-bold flex items-center gap-2">변경 전 (As-Is)</span></div><div className="space-y-3 opacity-70 pointer-events-none grayscale-[0.5]">{originalBlocks.map((block, index) => (<div key={`orig-${block.id}`} className="relative"><div className="absolute -left-2 top-2 z-10 w-5 h-5 bg-slate-700 text-slate-400 rounded-full flex items-center justify-center text-xs font-mono">{index + 1}</div><BlockRenderer block={block} isOriginal={true} readOnly={true} hideTargets={viewOptions.hideTargets} /></div>))}</div></div>)}
                 <div className={!compareMode ? 'max-w-[800px] mx-auto' : 'relative'}>
@@ -1921,11 +1975,20 @@ export default function App() {
                             onMoveDown={() => moveBlock(index, 'DOWN')}
                             isFirst={index === 0}
                             isLast={index === displayedBlocks.length - 1}
-                        />
+                          />
                         </div>
                       );
                     })}
-                    {!compareMode && viewMode !== 'HISTORY' && (<div onClick={openAddBlockModal} onDragOver={(e) => e.preventDefault()} onDrop={(e) => onDropFromInbox(e)} className="h-20 border-2 border-dashed border-[#2e3038] rounded-xl flex flex-col items-center justify-center text-slate-500 hover:border-[#7387ff] hover:text-[#7387ff] hover:bg-[#7387ff]/5 cursor-pointer transition-all gap-1 mt-4"><Plus size={20} /><span className="text-xs font-bold">블록 추가 또는 요청 드래그</span></div>)}
+                    {!compareMode && viewMode !== 'HISTORY' && (
+                      <div 
+                          onClick={() => openAddBlockModal('BOTTOM')} 
+                          onDragOver={(e) => e.preventDefault()} 
+                          onDrop={(e) => onDropFromInbox(e)} 
+                          className="h-20 border-2 border-dashed border-[#2e3038] rounded-xl flex flex-col items-center justify-center text-slate-500 hover:border-[#7387ff] hover:text-[#7387ff] hover:bg-[#7387ff]/5 cursor-pointer transition-all gap-1 mt-4"
+                      >
+                          <Plus size={20} /><span className="text-xs font-bold">블록 추가 또는 요청 드래그</span>
+                      </div>
+                  )}
                   </div>
                 </div>
               </div>
