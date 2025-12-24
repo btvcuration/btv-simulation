@@ -477,7 +477,7 @@ const BLOCK_STYLES = {
   CONTENT: { bg: 'bg-[#191b23]', border: 'border-[#44464f]', badge: 'border-slate-700 text-slate-500' }
 };
 
-// [수정된 BlockRenderer] 
+// [수정된 BlockRenderer] 메인 이미지 비율 분리 적용
 const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEditBannerId, onEditContentId, onEditTabName, onAddTab, readOnly = false, hideTargets = false, showExpired = false, onMoveUp, onMoveDown, isFirst, isLast }) => {
   const [activeTab, setActiveTab] = useState(0);
   const [previewIndex, setPreviewIndex] = useState(0);
@@ -532,7 +532,6 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
       const dragIndex = bannerDragItem.current?.index; const hoverIndex = bannerDragOverItem.current;
       if (dragIndex === undefined || hoverIndex === null || dragIndex === hoverIndex || bannerDragItem.current?.type !== listType) return;
       
-      // (드래그 앤 드롭 로직은 기존과 동일하므로 생략 없이 유지)
       if (block.type === 'TAB') { const newTabs = [...block.tabs]; const currentList = [...(newTabs[activeTab].leadingBanners || [])]; const [dragged] = currentList.splice(dragIndex, 1); currentList.splice(hoverIndex, 0, dragged); newTabs[activeTab].leadingBanners = currentList; onUpdate({ tabs: newTabs }); }
       else if (block.type === 'TODAY_BTV') { const currentList = [...(block.items || [])]; const [dragged] = currentList.splice(dragIndex, 1); currentList.splice(hoverIndex, 0, dragged); onUpdate({ items: currentList }); }
       else if (block.type === 'BIG_BANNER') { const currentList = [...(block.banners || [])]; const [dragged] = currentList.splice(dragIndex, 1); currentList.splice(hoverIndex, 0, dragged); onUpdate({ banners: currentList }); }
@@ -664,9 +663,11 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
       </div>
 
       {(block.type === 'TODAY_BTV' || block.type === 'BIG_BANNER') && (
-        // [수정] 1. 고정 높이 제거하고 aspect-ratio 적용 (Today: 3/2, Big: 21/9)
-        <div className={`relative w-full h-auto ${block.type === 'TODAY_BTV' ? 'aspect-[3/2]' : 'aspect-[21/9]'} bg-slate-900 rounded-lg overflow-hidden border ${block.type === 'TODAY_BTV' ? 'border-blue-500/30' : 'border-orange-500/30'} flex flex-col`}>
-            <div className="flex-1 bg-cover relative group cursor-pointer" 
+        // [수정 포인트 1] 컨테이너에는 h-auto를 주고, aspect-ratio는 제거합니다.
+        <div className={`relative w-full h-auto bg-slate-900 rounded-lg overflow-hidden border ${block.type === 'TODAY_BTV' ? 'border-blue-500/30' : 'border-orange-500/30'} flex flex-col`}>
+            
+            {/* [수정 포인트 2] 메인 이미지 영역(div)에 aspect-ratio를 직접 부여합니다. */}
+            <div className={`w-full ${block.type === 'TODAY_BTV' ? 'aspect-[3/2]' : 'aspect-[21/9]'} bg-cover relative group cursor-pointer`}
                  style={{
                      backgroundImage: (block.type === 'TODAY_BTV' ? itemsToRender : filteredBanners)?.[previewIndex]?.img ? `url(${(block.type === 'TODAY_BTV' ? itemsToRender : filteredBanners)[previewIndex].img})` : 'none',
                      backgroundPosition: 'right top'
@@ -694,7 +695,8 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
                )}
             </div>
 
-            <div className="h-28 bg-[#161820] flex items-center px-4 gap-3 overflow-x-auto border-t border-slate-800">
+            {/* [수정 포인트 3] 하단 리스트는 그대로 둡니다. 이제 메인 이미지를 밀어내지 않습니다. */}
+            <div className="h-28 bg-[#161820] flex items-center px-4 gap-3 overflow-x-auto border-t border-slate-800 shrink-0">
                {(block.type === 'TODAY_BTV' ? itemsToRender : filteredBanners)?.map((item, idx) => (
                   <div key={idx} 
                        onClick={(e) => handlePreviewSelect(e, idx)}
@@ -741,7 +743,6 @@ const BlockRenderer = ({ block, isDragging, isOriginal, onUpdate, onEditId, onEd
                  <div key={`bn-${idx}`} className={block.type === 'BAND_BANNER' ? 'w-full shrink-0' : 'shrink-0'}>
                    {block.type === 'BAND_BANNER' ? (
                       <div draggable={!isOriginal && !readOnly} onDragStart={(e) => onBannerDragStart(e, idx, 'BANNER')} onDragEnter={(e) => onBannerDragEnter(e, idx)} onDrop={(e) => onBannerDrop(e, 'BANNER')} onDragOver={(e) => e.preventDefault()} onClick={(e) => handleBannerClick(e, banner, idx)} 
-                           // [수정] 2. 띠배너 고정높이(h-24) 제거 -> aspect-[8/1]
                            className={`w-full h-auto aspect-[8/1] ${BANNER_STYLE.bg} border ${banner.isTarget ? 'border-pink-500/50' : BANNER_STYLE.border} ${BANNER_STYLE.hover} cursor-pointer rounded flex items-center justify-center ${BANNER_STYLE.text} text-[10px] font-bold relative bg-cover bg-center transition-colors group/band`} 
                            style={banner.img ? { backgroundImage: `url(${banner.img})` } : {}}>
                         {!banner.img && (banner.title || '배너')}
