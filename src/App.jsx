@@ -1321,7 +1321,11 @@ export default function App() {
       finalRemarks = `[Today B tv] ${finalRemarks || ''}`;
     }
 
+    // [핵심 수정 부분]
+    // DB에 저장될 때 'description' 필드에 [요청 타입] 태그가 반드시 포함되도록 조립합니다.
     let finalDescription = newRequestData.desc || '';
+    
+    // 줄바꿈 후 태그 추가 (파싱 로직이 이것을 찾습니다)
     finalDescription += `\n\n[요청 타입] ${requestType}`;
     finalDescription += `\n[기간] ${newRequestData.startDate} ~ ${newRequestData.endDate}`;
     finalDescription += `\n[타겟여부] ${newRequestData.isTarget ? 'Y' : 'N'}`;
@@ -1331,7 +1335,23 @@ export default function App() {
 
     if (USE_MOCK_DATA) {
       alert('(Mock) 요청이 등록되었습니다. (실제 DB 저장 X)');
-      const mockNewReq = { id: `req-${Date.now()}`, requester: newRequestData.requester, team: newRequestData.team, title: newRequestData.headline, gnb: newRequestData.gnb, desc: finalDescription, location: newRequestData.location, status: 'PENDING', type: requestType, remarks: finalRemarks, jiraLink: newRequestData.jiraLink, snapshot_new: null, startDate: newRequestData.startDate, endDate: newRequestData.endDate, isTarget: newRequestData.isTarget };
+      const mockNewReq = { 
+          id: `req-${Date.now()}`, 
+          requester: newRequestData.requester, 
+          team: newRequestData.team, 
+          title: newRequestData.headline, 
+          gnb: newRequestData.gnb, 
+          desc: finalDescription, // 조립된 설명 저장
+          location: newRequestData.location, 
+          status: 'PENDING', 
+          type: requestType, // Mock에서는 직접 type 지정
+          remarks: finalRemarks, 
+          jiraLink: newRequestData.jiraLink, 
+          snapshot_new: null, 
+          startDate: newRequestData.startDate, 
+          endDate: newRequestData.endDate, 
+          isTarget: newRequestData.isTarget 
+      };
       setRequests(prev => [mockNewReq, ...prev]);
       setModalState({ ...modalState, isOpen: false });
       return;
@@ -1344,7 +1364,7 @@ export default function App() {
       team: newRequestData.team,
       title: newRequestData.headline,
       gnb_target: newRequestData.gnb,
-      description: finalDescription,
+      description: finalDescription, // [중요] 태그가 포함된 설명문 저장
       location: newRequestData.location,
       status: 'PENDING',
       snapshot_new: null,
