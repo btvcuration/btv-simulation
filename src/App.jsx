@@ -272,15 +272,18 @@ const useBtvData = (supabase, viewMode) => {
                   let type = r.snapshot_new ? 'PUBLISH' : 'VERTICAL'; 
                   
                   // description에서 [요청 타입] 등 파싱 로직 (기존 유지)
-                  if (!r.remarks && r.description) {
-                       const typeMatch = r.description.match(/\[요청 타입\]\s*([A-Z0-9_]+)/);
-                       if (typeMatch) type = typeMatch[1];
-                       
-                       const remarksMatch = r.description.match(/\[비고\]\s*(.*)/);
-                       if (remarksMatch) r.remarks = remarksMatch[1];
-                       
-                       const jiraMatch = r.description.match(/\[Jira 티켓\]\s*(.*)/);
-                       if (jiraMatch && jiraMatch[1] !== '-') r.jiraLink = jiraMatch[1];
+                  if (r.description) {
+                        const typeMatch = r.description.match(/\[요청 타입\]\s*([A-Z0-9_]+)/);
+                        if (typeMatch) type = typeMatch[1]; // 여기서 BIG_BANNER 등을 추출
+                        
+                        // 비고(remarks)가 DB 컬럼에 없어서 null일 경우에만 description에서 추출
+                        if (!r.remarks) {
+                            const remarksMatch = r.description.match(/\[비고\]\s*(.*)/);
+                            if (remarksMatch) r.remarks = remarksMatch[1];
+                        }
+                        
+                        const jiraMatch = r.description.match(/\[Jira 티켓\]\s*(.*)/);
+                        if (jiraMatch && jiraMatch[1] !== '-') r.jiraLink = jiraMatch[1];
                   }
               
                   // [👇 여기부터 추가/수정된 부분입니다] 
