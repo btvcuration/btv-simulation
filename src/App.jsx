@@ -1694,7 +1694,7 @@ export default function App() {
     if (draggedId && draggedId !== targetId) reorderMenu(draggedId, targetId, type);
   };
   
-  // [수정] onDropFromInbox - 2단 배너 병합 및 기간 정보 처리
+  // [수정] onDropFromInbox - 로직 순서 변경 및 빅배너 설명 초기화
   const onDropFromInbox = async (e, dropIndex) => {
     e.preventDefault(); e.stopPropagation();
     const str = e.dataTransfer.getData('requestData');
@@ -1702,7 +1702,10 @@ export default function App() {
     if (str) {
       const req = JSON.parse(str);
       let targetBlockIndex = -1;
+      
+      // 타겟 타입 정규화 (TODAY_BTV_BANNER -> TODAY_BTV)
       let targetType = req.type;
+      if (targetType === 'TODAY_BTV_BANNER') targetType = 'TODAY_BTV';
 
       // 파싱 (req 객체에 없으면 description에서 추출)
       let reqStartDate = req.startDate || todayStr;
@@ -1720,7 +1723,8 @@ export default function App() {
       const newBannerObj = {
           id: `req-bn-${Date.now()}`,
           title: req.title,
-          desc: req.desc || '',
+          // [수정] 빅배너인 경우 설명(desc) 필드를 비워서 UI 깨짐 방지
+          desc: targetType === 'BIG_BANNER' ? '' : (req.desc || ''),
           landingType: 'NONE',
           isNew: true,
           startDate: reqStartDate,
@@ -1734,11 +1738,17 @@ export default function App() {
       const LEADING_COMPATIBLE_REQ = ['BANNER_1', 'BANNER_2', 'BANNER_3'];
       const CONTENT_BLOCK_TYPES = ['VERTICAL', 'HORIZONTAL', 'HORIZONTAL_MINI'];
 
-      // [병합 대상 찾기]
-      if (UNIQUE_TYPES.includes(req.type)) {
-          if (targetType === 'TODAY_BTV_BANNER') targetType = 'TODAY_BTV';
+      // [병합 대상 찾기 로직 개선]
+      // 1순위: 사용자가 드롭한 위치(dropIndex)에 동일한 타입의 블록이 있으면 그곳에 병합
+      if (dropIndex !== undefined && blocks[dropIndex] && blocks[dropIndex].type === targetType) {
+          targetBlockIndex = dropIndex;
+      }
+      // 2순위: 드롭 위치가 다르더라도 유니크 타입(Today, BigBanner)은 전체에서 검색하여 병합
+      else if (UNIQUE_TYPES.includes(req.type)) {
           targetBlockIndex = blocks.findIndex(b => b.type === targetType);
-      } else if (dropIndex !== undefined && blocks[dropIndex]) {
+      } 
+      // 3순위: 기타 호환 가능한 블록(멀티배너, 앞단배너 등) 확인
+      else if (dropIndex !== undefined && blocks[dropIndex]) {
           const droppedBlock = blocks[dropIndex];
           if (MULTI_BANNER_TYPES.includes(req.type) && droppedBlock.type === req.type) targetBlockIndex = dropIndex;
           else if (LEADING_COMPATIBLE_REQ.includes(req.type) && CONTENT_BLOCK_TYPES.includes(droppedBlock.type)) targetBlockIndex = dropIndex;
@@ -1773,7 +1783,7 @@ export default function App() {
           return;
       }
 
-      // [신규 생성]
+      // [신규 생성] (병합 대상이 없을 경우)
       const newBlock = { id: `req-${Date.now()}`, title: req.title, isNew: true, contentId: 'REQ_ID', remarks: req.remarks, showTitle: true };
       if (ALL_BANNER_TYPES.includes(req.type)) {
           newBlock.type = req.type;
@@ -1803,7 +1813,6 @@ export default function App() {
       if (!USE_MOCK_DATA && supabase) await supabase.from('requests').update({ status: 'COMPLETED' }).eq('id', req.id);
     }
   };
-
   if (isLoading) {
     return (
       <div className="h-screen flex flex-col items-center justify-center bg-[#100d1d] text-slate-300 gap-4">
@@ -1936,7 +1945,7 @@ export default function App() {
                 <div className="hidden md:flex items-center gap-2">
                   <button onClick={() => setCompareMode(!compareMode)} className={`flex items-center gap-1 px-3 py-1.5 rounded text-xs transition-colors ${compareMode ? 'bg-orange-500/20 text-orange-400 border border-orange-500/50' : 'bg-[#191b23] text-slate-400 border border-[#2e3038] hover:text-white'}`}>비교</button>
                   <button onClick={() => setShowInbox(!showInbox)} className={`relative px-3 py-1.5 rounded text-xs flex items-center gap-1 transition-colors ${showInbox ? 'bg-slate-700 text-white' : 'bg-[#191b23] text-slate-400 border border-[#2e3038] hover:text-white'}`}><Inbox size={14} /> 요청함</button>
-                  <button onClick={() => openAddBlockModal('TOP')} className="px-3 py-1.5 bg-[#191b23] border border-[#2e3038] hover:bg-[#2e3038] rounded text-xs text-white flex items-center gap-1 transition-colors"><Plus size={14} /> 추가</button>
+                  <button onClick={handleReset} className="px-3 py-1.5 bg-[#191b23] border border-[#2e3038] hover:bg-[#2e3038] rounded text-xs text-white flex items-center gap-1 transition-colors" title="변경사항 초기화"><RotateCcw size={14} /> 초기화</button>
                   <button onClick={openAddBlockModal} className="px-3 py-1.5 bg-[#191b23] border border-[#2e3038] hover:bg-[#2e3038] rounded text-xs text-white flex items-center gap-1 transition-colors"><Plus size={14} /> 추가</button>
                 </div>
                 <button onClick={handleOpenSaveModal} className="bg-[#7387ff] hover:bg-[#5b6dbf] text-white p-2 md:px-4 md:py-1.5 rounded text-xs font-bold flex items-center gap-1 shadow-lg shadow-indigo-500/20 transition-colors" title="저장"><Save size={16} /> <span className="hidden md:inline">저장</span></button>
