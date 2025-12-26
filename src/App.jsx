@@ -990,7 +990,7 @@ export default function App() {
   const todayStr = new Date().toISOString().split('T')[0];
   const [newRequestData, setNewRequestData] = useState({ 
       requester: '', team: '', headline: '', location: '', desc: '', remarks: '', 
-      type: 'VERTICAL', jiraLink: '', gnb: '홈',
+      type: 'BIG_BANNER', jiraLink: '', gnb: '홈',
       isTarget: false, startDate: todayStr, endDate: '9999-12-31' 
   });
 
