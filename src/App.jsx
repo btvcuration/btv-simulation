@@ -269,25 +269,32 @@ const useBtvData = (supabase, viewMode) => {
             
             if (data) {
                 const formattedRequests = data.map(r => {
+                  // 1. 기본 타입 설정 (배포요청이면 PUBLISH, 아니면 VERTICAL)
                   let type = r.snapshot_new ? 'PUBLISH' : 'VERTICAL'; 
                   
-                  // description에서 [요청 타입] 등 파싱 로직 (기존 유지)
+                  // 2. [핵심 수정] Description 파싱 로직 분리
+                  // 비고(remarks) 존재 여부와 상관없이 Description이 있으면 무조건 타입을 파싱하도록 변경
                   if (r.description) {
+                        // [요청 타입] 추출
                         const typeMatch = r.description.match(/\[요청 타입\]\s*([A-Z0-9_]+)/);
-                        if (typeMatch) type = typeMatch[1]; // 여기서 BIG_BANNER 등을 추출
+                        if (typeMatch) {
+                            type = typeMatch[1]; 
+                        }
                         
-                        // 비고(remarks)가 DB 컬럼에 없어서 null일 경우에만 description에서 추출
+                        // [Jira 티켓] 추출
+                        const jiraMatch = r.description.match(/\[Jira 티켓\]\s*(.*)/);
+                        if (jiraMatch && jiraMatch[1] !== '-') {
+                            r.jiraLink = jiraMatch[1];
+                        }
+
+                        // DB 컬럼에 remarks가 없고 description에만 [비고] 텍스트가 섞여 있는 경우 추출
                         if (!r.remarks) {
                             const remarksMatch = r.description.match(/\[비고\]\s*(.*)/);
                             if (remarksMatch) r.remarks = remarksMatch[1];
                         }
-                        
-                        const jiraMatch = r.description.match(/\[Jira 티켓\]\s*(.*)/);
-                        if (jiraMatch && jiraMatch[1] !== '-') r.jiraLink = jiraMatch[1];
                   }
               
-                  // [👇 여기부터 추가/수정된 부분입니다] 
-                  // 캘린더 비교를 위해 YYYY-MM-DD 형식의 문자열을 강제로 만듭니다.
+                  // 3. 날짜 포맷팅
                   const rawDateObj = new Date(r.created_at || r.createdAt); 
                   const dateYMD = `${rawDateObj.getFullYear()}-${String(rawDateObj.getMonth() + 1).padStart(2, '0')}-${String(rawDateObj.getDate()).padStart(2, '0')}`;
               
@@ -297,16 +304,13 @@ const useBtvData = (supabase, viewMode) => {
                       requester: r.requester, 
                       team: r.team, 
                       gnb: r.gnb_target, 
-                      type: type, 
+                      type: type, // 여기서 올바르게 파싱된 타입이 들어갑니다.
                       desc: r.description, 
                       location: r.location, 
                       status: r.status, 
-                      
-                      // [👇 날짜 관련 필드 수정]
-                      date: dateYMD,       // 화면에 보여줄 때도 이 포맷 사용
-                      dateYMD: dateYMD,    // 캘린더에서 점(Dot) 찍을 때 비교할 키값 (핵심!)
+                      date: dateYMD,        
+                      dateYMD: dateYMD,    
                       createdAt: new Date(r.created_at || r.createdAt).toLocaleString(),
-                      
                       remarks: r.remarks, 
                       jiraLink: r.jira_link,
                       changes: r.changes || [], 
