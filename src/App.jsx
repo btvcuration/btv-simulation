@@ -1978,12 +1978,17 @@ export default function App() {
                 <button onClick={handleOpenSaveModal} className="bg-[#7387ff] hover:bg-[#5b6dbf] text-white p-2 md:px-4 md:py-1.5 rounded text-xs font-bold flex items-center gap-1 shadow-lg shadow-indigo-500/20 transition-colors" title="저장"><Save size={16} /> <span className="hidden md:inline">저장</span></button>
                 <div className="md:hidden relative">
                   <button onClick={() => setIsActionMenuOpen(!isActionMenuOpen)} className="p-1.5 hover:bg-[#2e3038] rounded text-slate-400 hover:text-white transition-colors"><MoreVertical size={20} /></button>
+                  
                   {isActionMenuOpen && (
                     <div className="absolute right-0 top-full mt-2 bg-[#191b23] border border-[#2e3038] rounded-lg shadow-xl w-32 overflow-hidden flex flex-col z-50">
                       <button onClick={() => { setCompareMode(!compareMode); setIsActionMenuOpen(false); }} className="px-4 py-3 text-xs text-left hover:bg-[#2e3038] text-slate-300 border-b border-[#2e3038]">비교 모드 {compareMode ? 'OFF' : 'ON'}</button>
                       <button onClick={() => { setShowInbox(!showInbox); setIsActionMenuOpen(false); }} className="px-4 py-3 text-xs text-left hover:bg-[#2e3038] text-slate-300 border-b border-[#2e3038]">요청함 열기</button>
-                      <button onClick={() => { openAddBlockModal('TOP'); setIsActionMenuOpen(false); }} className="px-4 py-3 text-xs text-left hover:bg-[#2e3038] text-white font-bold">블록 추가</button>
-                      <button onClick={() => { openAddBlockModal(); setIsActionMenuOpen(false); }} className="px-4 py-3 text-xs text-left hover:bg-[#2e3038] text-white font-bold">블록 추가</button>
+                      <button onClick={() => { handleReset(); setIsActionMenuOpen(false); }} className="px-4 py-3 text-xs text-left hover:bg-[#2e3038] text-slate-300 border-b border-[#2e3038] flex items-center gap-2">
+                         <RotateCcw size={12} /> 초기화
+                      </button>
+                      <button onClick={() => { openAddBlockModal('TOP'); setIsActionMenuOpen(false); }} className="px-4 py-3 text-xs text-left hover:bg-[#2e3038] text-white font-bold">
+                        블록 추가
+                      </button>
                     </div>
                   )}
                   {isActionMenuOpen && <div className="fixed inset-0 z-40" onClick={() => setIsActionMenuOpen(false)}></div>}
